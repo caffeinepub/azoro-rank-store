@@ -1,46 +1,24 @@
 # Azoro Rank Store
 
 ## Current State
-New project. No existing code.
+Full rank store with 6 rank tiers, 7D/Seasonal toggle, Stripe checkout via PurchaseModal, and admin panel. Players could enter their Minecraft username and be redirected to Stripe for payment.
 
 ## Requested Changes (Diff)
 
 ### Add
-- A rank store website for the Azoro Minecraft server
-- Six rank tiers with two duration options each (7 Days and Seasonal):
-  - CUSTOM RANK: 7D = 250 coins | Seasonal = 600 coins
-  - CAPTAIN+: 7D = 200 coins | Seasonal = 450 coins
-  - CAPTAIN: 7D = 150 coins | Seasonal = 300 coins
-  - MONARCH: 7D = 90 coins | Seasonal = 200 coins
-  - SEAMON+: 7D = 35 coins | Seasonal = 100 coins
-  - SEAMON: 7D = 15 coins | Seasonal = 70 coins
-- Each rank has a name, description, color/tier indicator, and pricing
-- Duration types: "7 Days" (temporary access) and "Seasonal" (lasts until season reset)
-- Seasonal rank note: if season resets before 1 month of purchase, rank is automatically given in the next season
-- Payment processed via Stripe checkout on the website
-- Order/purchase tracking: store customer Minecraft username, rank selected, duration, payment status
-- Admin view to see all orders
+- Discord ticket button in PurchaseModal linking to https://discord.gg/zWATKsTFzx
+- Instructions telling players to open a ticket in Discord to complete payment
 
 ### Modify
-- Nothing (new project)
+- PurchaseModal: replace the Stripe checkout flow with a Discord ticket flow. After entering username, the "Proceed to Payment" button should open https://discord.gg/zWATKsTFzx in a new tab. Show clear instructions that payment is done via Discord ticket.
+- Remove Stripe-related info text ("Payment secured via Stripe") and replace with Discord ticket instructions.
 
 ### Remove
-- Nothing (new project)
+- Stripe checkout API call (useCreateCheckoutSession) from PurchaseModal
+- Payment status banner logic tied to Stripe redirects (success/cancelled query params) can stay but is less relevant now
 
 ## Implementation Plan
-1. Backend (Motoko):
-   - Define rank catalog (name, tier, 7D price, seasonal price, color)
-   - Order record: id, minecraft_username, rank_name, duration, price, status (pending/paid/fulfilled), timestamp
-   - Create order function (returns Stripe session info)
-   - Get orders by username
-   - Admin: get all orders, update order status
-   - Stripe webhook handler to mark orders as paid
-
-2. Frontend:
-   - Hero section with Azoro branding and tagline "Choose your power. Rule the season. Stand above the rest."
-   - Rank cards grid showing all 6 ranks with tier badge, prices for both durations
-   - Duration toggle (7D / Seasonal) on each card or globally
-   - "Buy Now" button on each card opens a purchase modal asking for Minecraft username, then redirects to Stripe checkout
-   - Order success/cancel pages
-   - Footer note about seasonal rank policy
-   - Optional: simple order lookup by Minecraft username
+1. Rewrite PurchaseModal to remove all Stripe/checkout logic
+2. After username validation, show a summary card with rank, duration, price, and username
+3. Button opens Discord link (https://discord.gg/zWATKsTFzx) in new tab
+4. Add instruction text: "Open a ticket in our Discord server to complete your payment. Tell us your username and the rank you want."

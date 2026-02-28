@@ -1,16 +1,13 @@
 import { Button } from "@/components/ui/button";
 import {
-  CheckCircle2,
   ChevronDown,
   ExternalLink,
   Shield,
   ShoppingCart,
   Sword,
-  XCircle,
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { motion } from "motion/react";
+import { useRef, useState } from "react";
 import { Duration } from "../backend";
 import type { Rank } from "../backend";
 import OrderLookup from "../components/OrderLookup";
@@ -69,9 +66,6 @@ const FALLBACK_RANKS: Rank[] = [
 export default function HomePage() {
   const [duration, setDuration] = useState<Duration>(Duration.SevenDay);
   const [selectedRank, setSelectedRank] = useState<Rank | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<
-    "success" | "cancelled" | null
-  >(null);
   const shopRef = useRef<HTMLDivElement>(null);
 
   const { data: ranksData, isLoading: ranksLoading } = useRanks();
@@ -81,22 +75,6 @@ export default function HomePage() {
   const sortedRanks = [...ranks].sort(
     (a, b) => Number(a.tier) - Number(b.tier),
   );
-
-  // Check payment query params on mount
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const payment = params.get("payment");
-    if (payment === "success") {
-      setPaymentStatus("success");
-      toast.success("Payment successful! Your rank will be applied soon.");
-      // Clean URL
-      window.history.replaceState({}, "", window.location.pathname);
-    } else if (payment === "cancelled") {
-      setPaymentStatus("cancelled");
-      toast.error("Payment was cancelled.");
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-  }, []);
 
   const scrollToShop = () => {
     shopRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -233,42 +211,6 @@ export default function HomePage() {
 
         {/* Content */}
         <div className="relative z-10 container max-w-5xl mx-auto px-4 text-center pt-20">
-          {/* Payment status banners */}
-          <AnimatePresence>
-            {paymentStatus === "success" && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="mb-8 inline-flex items-center gap-3 px-6 py-3 rounded-xl font-mono text-sm"
-                style={{
-                  background: "oklch(0.68 0.22 142 / 0.15)",
-                  border: "1px solid oklch(0.68 0.22 142 / 0.5)",
-                  color: "oklch(0.68 0.22 142)",
-                }}
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Payment successful! Your rank will be applied shortly.
-              </motion.div>
-            )}
-            {paymentStatus === "cancelled" && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="mb-8 inline-flex items-center gap-3 px-6 py-3 rounded-xl font-mono text-sm"
-                style={{
-                  background: "oklch(0.62 0.22 25 / 0.15)",
-                  border: "1px solid oklch(0.62 0.22 25 / 0.5)",
-                  color: "oklch(0.62 0.22 25)",
-                }}
-              >
-                <XCircle className="w-4 h-4" />
-                Payment was cancelled. Browse our ranks and try again.
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* Server badge */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
