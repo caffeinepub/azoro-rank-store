@@ -1,0 +1,328 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Font Faces ──────────────────────────────────────────── */
+/* Note: using system font stacks — no external CDN needed */
+
+/* ─── Design Tokens ──────────────────────────────────────── */
+@layer base {
+  :root {
+    --radius: 0.5rem;
+
+    /* Dark gaming theme — only dark mode */
+    --background: 0.07 0.01 280;
+    --foreground: 0.95 0.01 90;
+    --card: 0.1 0.015 280;
+    --card-foreground: 0.95 0.01 90;
+    --popover: 0.12 0.02 280;
+    --popover-foreground: 0.95 0.01 90;
+    --primary: 0.78 0.16 85;
+    --primary-foreground: 0.08 0.01 280;
+    --secondary: 0.15 0.02 280;
+    --secondary-foreground: 0.85 0.01 90;
+    --muted: 0.14 0.02 280;
+    --muted-foreground: 0.55 0.03 280;
+    --accent: 0.78 0.16 85;
+    --accent-foreground: 0.08 0.01 280;
+    --destructive: 0.62 0.22 25;
+    --destructive-foreground: 0.98 0 0;
+    --border: 0.22 0.03 280;
+    --input: 0.18 0.02 280;
+    --ring: 0.78 0.16 85;
+
+    /* Chart colors */
+    --chart-1: 0.78 0.16 85;
+    --chart-2: 0.68 0.22 142;
+    --chart-3: 0.65 0.24 264;
+    --chart-4: 0.72 0.19 30;
+    --chart-5: 0.62 0.22 310;
+
+    /* Sidebar */
+    --sidebar: 0.09 0.015 280;
+    --sidebar-foreground: 0.9 0.01 90;
+    --sidebar-primary: 0.78 0.16 85;
+    --sidebar-primary-foreground: 0.08 0.01 280;
+    --sidebar-accent: 0.14 0.02 280;
+    --sidebar-accent-foreground: 0.9 0.01 90;
+    --sidebar-border: 0.22 0.03 280;
+    --sidebar-ring: 0.78 0.16 85;
+
+    /* Rank colors */
+    --rank-seamon: 0.68 0.19 42;
+    --rank-seamon-plus: 0.68 0.22 142;
+    --rank-monarch: 0.68 0.22 310;
+    --rank-captain: 0.62 0.2 264;
+    --rank-captain-plus: 0.62 0.22 25;
+    --rank-custom: 0.78 0.16 85;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ─── Custom Utilities ───────────────────────────────────── */
+@layer utilities {
+  .font-display {
+    font-family: "Bricolage Grotesque", sans-serif;
+  }
+
+  .font-mono-custom {
+    font-family: "Geist Mono", monospace;
+  }
+
+  /* Pixel grid texture */
+  .pixel-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* Noise texture overlay */
+  .noise-overlay::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    opacity: 0.3;
+  }
+
+  .glow-gold {
+    text-shadow:
+      0 0 20px oklch(0.78 0.16 85 / 0.8),
+      0 0 60px oklch(0.78 0.16 85 / 0.4),
+      0 0 120px oklch(0.78 0.16 85 / 0.2);
+  }
+
+  .glow-text-sm {
+    text-shadow: 0 0 10px currentColor;
+  }
+
+  .card-hover-glow {
+    transition:
+      box-shadow 0.3s ease,
+      transform 0.3s ease,
+      border-color 0.3s ease;
+  }
+
+  .card-hover-glow:hover {
+    transform: translateY(-4px);
+  }
+
+  /* Animated gradient border */
+  .gradient-border {
+    position: relative;
+    background-clip: padding-box;
+  }
+
+  /* Scanline effect for the dark gaming look */
+  .scanlines::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.04) 2px,
+      rgba(0, 0, 0, 0.04) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Duration toggle */
+  .duration-toggle {
+    @apply relative inline-flex rounded-full p-1;
+    background: oklch(0.12 0.02 280);
+    border: 1px solid oklch(0.25 0.04 280);
+  }
+
+  .duration-toggle-item {
+    @apply relative z-10 cursor-pointer select-none rounded-full px-6 py-2 text-sm font-bold tracking-widest uppercase transition-colors duration-200;
+  }
+
+  .duration-toggle-active {
+    @apply text-background;
+    background: oklch(0.78 0.16 85);
+    box-shadow: 0 0 20px oklch(0.78 0.16 85 / 0.5);
+  }
+
+  .duration-toggle-inactive {
+    @apply text-muted-foreground;
+  }
+}
+
+/* ─── Keyframe Animations ────────────────────────────────── */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes particle-rise {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(-120px) translateX(var(--drift, 20px)) scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-particle {
+  animation: particle-rise 4s ease-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(0.78 0.16 85 / 0.15) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* ─── Rank card styles ───────────────────────────────────── */
+.rank-card-seamon {
+  --rank-color: oklch(0.68 0.19 42);
+  border-color: oklch(0.68 0.19 42 / 0.3);
+}
+.rank-card-seamon:hover {
+  border-color: oklch(0.68 0.19 42 / 0.7);
+  box-shadow: 0 0 30px oklch(0.68 0.19 42 / 0.25);
+}
+
+.rank-card-seamonplus {
+  --rank-color: oklch(0.68 0.22 142);
+  border-color: oklch(0.68 0.22 142 / 0.3);
+}
+.rank-card-seamonplus:hover {
+  border-color: oklch(0.68 0.22 142 / 0.7);
+  box-shadow: 0 0 30px oklch(0.68 0.22 142 / 0.25);
+}
+
+.rank-card-monarch {
+  --rank-color: oklch(0.68 0.22 310);
+  border-color: oklch(0.68 0.22 310 / 0.3);
+}
+.rank-card-monarch:hover {
+  border-color: oklch(0.68 0.22 310 / 0.7);
+  box-shadow: 0 0 30px oklch(0.68 0.22 310 / 0.25);
+}
+
+.rank-card-captain {
+  --rank-color: oklch(0.62 0.2 264);
+  border-color: oklch(0.62 0.2 264 / 0.3);
+}
+.rank-card-captain:hover {
+  border-color: oklch(0.62 0.2 264 / 0.7);
+  box-shadow: 0 0 30px oklch(0.62 0.2 264 / 0.25);
+}
+
+.rank-card-captainplus {
+  --rank-color: oklch(0.62 0.22 25);
+  border-color: oklch(0.62 0.22 25 / 0.3);
+}
+.rank-card-captainplus:hover {
+  border-color: oklch(0.62 0.22 25 / 0.7);
+  box-shadow: 0 0 40px oklch(0.62 0.22 25 / 0.3);
+}
+
+.rank-card-custom {
+  --rank-color: oklch(0.78 0.16 85);
+  border-color: oklch(0.78 0.16 85 / 0.4);
+}
+.rank-card-custom:hover {
+  border-color: oklch(0.78 0.16 85 / 0.8);
+  box-shadow: 0 0 50px oklch(0.78 0.16 85 / 0.35);
+}
+
+/* scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: oklch(0.08 0.01 280);
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.25 0.04 280);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.78 0.16 85 / 0.6);
+}
