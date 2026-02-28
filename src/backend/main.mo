@@ -5,8 +5,6 @@ import Nat "mo:core/Nat";
 import Text "mo:core/Text";
 import Iter "mo:core/Iter";
 import Map "mo:core/Map";
-import Order "mo:core/Order";
-import List "mo:core/List";
 import Runtime "mo:core/Runtime";
 import Time "mo:core/Time";
 import Principal "mo:core/Principal";
@@ -14,7 +12,7 @@ import MixinAuthorization "authorization/MixinAuthorization";
 
 actor {
   // Types
-  type Rank = {
+  public type Rank = {
     name : Text;
     color : Text;
     tier : Nat;
@@ -22,18 +20,18 @@ actor {
     seasonalPrice : Nat;
   };
 
-  type Duration = {
+  public type Duration = {
     #SevenDay;
     #Seasonal;
   };
 
-  type OrderStatusCode = {
+  public type OrderStatusCode = {
     #pending;
     #paid;
     #fulfilled;
   };
 
-  type Order = {
+  public type Order = {
     id : Nat;
     minecraftUsername : Text;
     rankName : Text;
@@ -58,6 +56,7 @@ actor {
   var nextOrderId = 1;
   let orders = Map.empty<Nat, Order>();
   let userProfiles = Map.empty<Principal, UserProfile>();
+  var adminClaimed = false;
 
   // Ranks catalog
   let ranks : [Rank] = [
@@ -179,31 +178,27 @@ actor {
     };
   };
 
-  func toStripeItem(rank : Rank, duration : Duration) : Stripe.ShoppingItem {
-    {
-      productName = rank.name;
-      productDescription = "Azoro Minecraft rank - " # (switch (duration) {
-        case (#SevenDay) { "7 days" };
-        case (#Seasonal) { "Seasonal" };
-      });
-      priceInCents = switch (duration) {
-        case (#SevenDay) { rank.sevenDayPrice * 100 };
-        case (#Seasonal) { rank.seasonalPrice * 100 };
-      };
-      currency = "USD";
-      quantity = 1;
-    };
-  };
-
+  // Open to anyone - no auth check needed for checkout
   public shared ({ caller }) func createCheckoutSession(items : [Stripe.ShoppingItem], successUrl : Text, cancelUrl : Text) : async Text {
     await Stripe.createCheckoutSession(getStripeConfig(), caller, items, successUrl, cancelUrl, transform);
   };
 
+  // Open to anyone - no auth check needed for session status
   public func getStripeSessionStatus(sessionId : Text) : async Stripe.StripeSessionStatus {
     await Stripe.getSessionStatus(getStripeConfig(), sessionId, transform);
   };
 
-  public query ({ caller }) func transform(input : OutCall.TransformationInput) : async OutCall.TransformationOutput {
+  public query func transform(input : OutCall.TransformationInput) : async OutCall.TransformationOutput {
     OutCall.transform(input);
+  };
+
+  // Claim first admin - first logged-in user to call this becomes admin, no token needed
+  public shared ({ caller }) func claimFirstAdmin() : async Bool {
+    if (adminClaimed) { return false };
+    if (caller.isAnonymous()) { return false };
+    accessControlState.userRoles.add(caller, #admin);
+    accessControlState.adminAssigned := true;
+    adminClaimed := true;
+    true;
   };
 };

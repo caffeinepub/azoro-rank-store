@@ -1,4 +1,6 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -7,10 +9,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CheckCircle2,
   Clock,
+  CreditCard,
+  Eye,
+  EyeOff,
   Loader2,
   Lock,
   Package,
@@ -18,9 +24,16 @@ import {
   Users,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { Duration, OrderStatusCode } from "../backend";
+import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { useAllOrders, useIsAdmin } from "../hooks/useQueries";
+import {
+  useAllOrders,
+  useIsAdmin,
+  useIsStripeConfigured,
+} from "../hooks/useQueries";
 
 const STATUS_STYLES: Record<OrderStatusCode, { label: string; color: string }> =
   {
@@ -45,6 +58,66 @@ export default function AdminPage() {
 
   const { data: isAdmin, isLoading: adminLoading } = useIsAdmin();
   const { data: orders, isLoading: ordersLoading } = useAllOrders();
+  const { actor } = useActor();
+
+  const queryClient = useQueryClient();
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [claimSuccess, setClaimSuccess] = useState(false);
+  const [claimFailed, setClaimFailed] = useState(false);
+
+  const { data: isStripeConfigured, isLoading: stripeConfigLoading } =
+    useIsStripeConfigured();
+  const [stripeKey, setStripeKey] = useState("");
+  const [showStripeKey, setShowStripeKey] = useState(false);
+  const [isSavingStripe, setIsSavingStripe] = useState(false);
+
+  const handleClaimAdmin = async () => {
+    if (!actor) return;
+    setIsClaiming(true);
+    setClaimSuccess(false);
+    setClaimFailed(false);
+    try {
+      const result = await actor.claimFirstAdmin();
+      if (result) {
+        setClaimSuccess(true);
+        await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+      } else {
+        setClaimFailed(true);
+      }
+    } catch {
+      setClaimFailed(true);
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  const handleSaveStripe = async () => {
+    const key = stripeKey.trim();
+    if (!key) {
+      toast.error("Please enter your Stripe secret key.");
+      return;
+    }
+    if (!key.startsWith("sk_")) {
+      toast.error("Stripe secret key must start with 'sk_'.");
+      return;
+    }
+    if (!actor) return;
+    setIsSavingStripe(true);
+    try {
+      await actor.setStripeConfiguration({
+        secretKey: key,
+        allowedCountries: [],
+      });
+      setStripeKey("");
+      await queryClient.invalidateQueries({ queryKey: ["isStripeConfigured"] });
+      toast.success("Stripe configured! Payments are now live.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to save Stripe config. Please try again.");
+    } finally {
+      setIsSavingStripe(false);
+    }
+  };
 
   const goHome = () => {
     window.history.pushState({}, "", "/");
@@ -184,9 +257,72 @@ export default function AdminPage() {
             <h2 className="font-display font-black text-3xl mb-2 text-foreground">
               Access Denied
             </h2>
-            <p className="text-muted-foreground font-mono text-sm max-w-xs mb-8">
+            <p className="text-muted-foreground font-mono text-sm max-w-xs mb-6">
               Your account does not have admin privileges.
             </p>
+
+            {/* Claim Admin section */}
+            <div
+              className="w-full max-w-sm rounded-2xl p-6 mb-6 text-center"
+              style={{
+                background: "oklch(0.1 0.015 280)",
+                border: "1px solid oklch(0.78 0.16 85 / 0.25)",
+                boxShadow: "0 0 30px oklch(0.78 0.16 85 / 0.06)",
+              }}
+            >
+              <Shield
+                className="w-8 h-8 mx-auto mb-3"
+                style={{ color: "oklch(0.78 0.16 85)" }}
+              />
+              <p className="font-mono text-xs text-muted-foreground mb-5">
+                If no admin has been claimed yet, you can become the first
+                admin.
+              </p>
+
+              <Button
+                onClick={handleClaimAdmin}
+                disabled={isClaiming || claimSuccess}
+                className="w-full font-display font-bold uppercase tracking-widest text-sm"
+                style={{
+                  background: "oklch(0.78 0.16 85)",
+                  color: "oklch(0.08 0.01 280)",
+                  boxShadow: isClaiming
+                    ? "none"
+                    : "0 0 16px oklch(0.78 0.16 85 / 0.3)",
+                }}
+              >
+                {isClaiming ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Claiming…
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-4 h-4 mr-2" />
+                    Claim Admin
+                  </>
+                )}
+              </Button>
+
+              {claimSuccess && (
+                <p
+                  className="font-mono text-xs text-center mt-3"
+                  style={{ color: "oklch(0.68 0.22 142)" }}
+                >
+                  You are now admin! Refreshing…
+                </p>
+              )}
+
+              {claimFailed && !isClaiming && (
+                <p
+                  className="font-mono text-xs text-center mt-3"
+                  style={{ color: "oklch(0.62 0.22 25)" }}
+                >
+                  Admin has already been claimed by another account.
+                </p>
+              )}
+            </div>
+
             <Button
               variant="outline"
               onClick={goHome}
@@ -262,6 +398,175 @@ export default function AdminPage() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Stripe Configuration */}
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{
+                background: "oklch(0.1 0.015 280)",
+                border: isStripeConfigured
+                  ? "1px solid oklch(0.68 0.22 142 / 0.4)"
+                  : "1px solid oklch(0.62 0.22 25 / 0.4)",
+              }}
+            >
+              <div
+                className="px-6 py-4 flex items-center gap-3"
+                style={{ borderBottom: "1px solid oklch(0.18 0.03 280)" }}
+              >
+                <CreditCard
+                  className="w-4 h-4"
+                  style={{
+                    color: isStripeConfigured
+                      ? "oklch(0.68 0.22 142)"
+                      : "oklch(0.62 0.22 25)",
+                  }}
+                />
+                <h3 className="font-display font-bold text-lg">
+                  Stripe Payments
+                </h3>
+                <span
+                  className="ml-auto px-2 py-0.5 rounded font-mono text-xs font-bold"
+                  style={
+                    stripeConfigLoading
+                      ? {
+                          background: "oklch(0.2 0.03 280)",
+                          color: "oklch(0.6 0.01 280)",
+                        }
+                      : isStripeConfigured
+                        ? {
+                            background: "oklch(0.68 0.22 142 / 0.15)",
+                            color: "oklch(0.68 0.22 142)",
+                          }
+                        : {
+                            background: "oklch(0.62 0.22 25 / 0.15)",
+                            color: "oklch(0.62 0.22 25)",
+                          }
+                  }
+                >
+                  {stripeConfigLoading
+                    ? "Checking…"
+                    : isStripeConfigured
+                      ? "Active"
+                      : "Not configured"}
+                </span>
+              </div>
+
+              <div className="px-6 py-5">
+                {isStripeConfigured ? (
+                  <div className="space-y-4">
+                    <p className="font-mono text-sm text-muted-foreground">
+                      Stripe is active. Players can purchase ranks now. To
+                      update your key, enter a new one below.
+                    </p>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                        New Stripe Secret Key
+                      </Label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input
+                            type={showStripeKey ? "text" : "password"}
+                            value={stripeKey}
+                            onChange={(e) => setStripeKey(e.target.value)}
+                            placeholder="sk_live_..."
+                            className="font-mono text-sm bg-secondary border-border pr-10"
+                            disabled={isSavingStripe}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowStripeKey((v) => !v)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {showStripeKey ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                        <Button
+                          onClick={handleSaveStripe}
+                          disabled={isSavingStripe || !stripeKey.trim()}
+                          style={{
+                            background: "oklch(0.68 0.22 142)",
+                            color: "oklch(0.08 0.01 280)",
+                          }}
+                        >
+                          {isSavingStripe ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            "Update"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="font-mono text-sm text-muted-foreground">
+                      Enter your Stripe secret key to activate payments. Get it
+                      from{" "}
+                      <a
+                        href="https://dashboard.stripe.com/apikeys"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                        style={{ color: "oklch(0.78 0.16 85)" }}
+                      >
+                        dashboard.stripe.com/apikeys
+                      </a>
+                      .
+                    </p>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                        Stripe Secret Key
+                      </Label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input
+                            type={showStripeKey ? "text" : "password"}
+                            value={stripeKey}
+                            onChange={(e) => setStripeKey(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveStripe();
+                            }}
+                            placeholder="sk_live_... or sk_test_..."
+                            className="font-mono text-sm bg-secondary border-border pr-10"
+                            disabled={isSavingStripe}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowStripeKey((v) => !v)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {showStripeKey ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                        <Button
+                          onClick={handleSaveStripe}
+                          disabled={isSavingStripe || !stripeKey.trim()}
+                          style={{
+                            background: "oklch(0.78 0.16 85)",
+                            color: "oklch(0.08 0.01 280)",
+                            boxShadow: "0 0 16px oklch(0.78 0.16 85 / 0.3)",
+                          }}
+                        >
+                          {isSavingStripe ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            "Save"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Orders table */}

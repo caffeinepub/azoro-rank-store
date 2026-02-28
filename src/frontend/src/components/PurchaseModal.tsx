@@ -82,7 +82,17 @@ export default function PurchaseModal({
       window.location.href = checkoutUrl;
     } catch (err) {
       console.error(err);
-      toast.error("Failed to create checkout. Please try again.");
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg.includes("Stripe needs to be first configured") ||
+        msg.includes("not configured")
+      ) {
+        toast.error(
+          "Stripe payments are not set up yet. Please contact the store admin.",
+        );
+      } else {
+        toast.error("Failed to create checkout. Please try again.");
+      }
     }
   };
 
@@ -150,7 +160,7 @@ export default function PurchaseModal({
                 className="font-display font-bold text-lg"
                 style={{ color: rankColor }}
               >
-                {price} coins
+                ${price} USD
               </span>
             </div>
           </div>
