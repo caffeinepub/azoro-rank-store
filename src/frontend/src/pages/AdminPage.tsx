@@ -64,6 +64,9 @@ export default function AdminPage() {
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
   const [claimFailed, setClaimFailed] = useState(false);
+  const [fulfillingOrderId, setFulfillingOrderId] = useState<bigint | null>(
+    null,
+  );
 
   const { data: isStripeConfigured, isLoading: stripeConfigLoading } =
     useIsStripeConfigured();
@@ -88,6 +91,28 @@ export default function AdminPage() {
       setClaimFailed(true);
     } finally {
       setIsClaiming(false);
+    }
+  };
+
+  const handleFulfillOrder = async (orderId: bigint) => {
+    if (!actor) return;
+    setFulfillingOrderId(orderId);
+    try {
+      const success = await actor.updateOrderStatus(
+        orderId,
+        OrderStatusCode.fulfilled,
+      );
+      if (success) {
+        toast.success("Order marked as fulfilled");
+        await queryClient.invalidateQueries({ queryKey: ["allOrders"] });
+      } else {
+        toast.error("Failed to update order status.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setFulfillingOrderId(null);
     }
   };
 
@@ -613,6 +638,7 @@ export default function AdminPage() {
                           "Price",
                           "Status",
                           "Date",
+                          "Actions",
                         ].map((h) => (
                           <TableHead
                             key={h}
@@ -654,7 +680,7 @@ export default function AdminPage() {
                               {durationLabel}
                             </TableCell>
                             <TableCell className="font-mono text-sm">
-                              ${Number(order.priceUsd)}
+                              ₹{Number(order.priceUsd)}
                             </TableCell>
                             <TableCell>
                               <span
@@ -669,6 +695,36 @@ export default function AdminPage() {
                             </TableCell>
                             <TableCell className="font-mono text-xs text-muted-foreground">
                               {date}
+                            </TableCell>
+                            <TableCell>
+                              {order.status === OrderStatusCode.fulfilled ? (
+                                <span
+                                  className="flex items-center gap-1 font-mono text-xs"
+                                  style={{ color: "oklch(0.62 0.2 264)" }}
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Done
+                                </span>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  disabled={fulfillingOrderId === order.id}
+                                  onClick={() => handleFulfillOrder(order.id)}
+                                  className="font-mono text-xs uppercase tracking-widest h-7 px-2"
+                                  style={{
+                                    background: "oklch(0.62 0.2 264 / 0.15)",
+                                    color: "oklch(0.62 0.2 264)",
+                                    border:
+                                      "1px solid oklch(0.62 0.2 264 / 0.4)",
+                                  }}
+                                >
+                                  {fulfillingOrderId === order.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    "Mark Fulfilled"
+                                  )}
+                                </Button>
+                              )}
                             </TableCell>
                           </TableRow>
                         );

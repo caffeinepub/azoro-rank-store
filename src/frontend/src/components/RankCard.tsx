@@ -217,7 +217,7 @@ export default function RankCard({
             </span>
             <div className="mb-1">
               <div className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
-                coins
+                INR
               </div>
               <div className="text-xs font-mono text-muted-foreground">
                 {durationLabel}

@@ -1,12 +1,20 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, ExternalLink, ShoppingCart, User, X } from "lucide-react";
+import {
+  ArrowRight,
+  ExternalLink,
+  Loader2,
+  ShoppingCart,
+  User,
+  X,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { SiDiscord } from "react-icons/si";
 import type { Rank } from "../backend";
 import { Duration } from "../backend";
+import { useActor } from "../hooks/useActor";
 
 interface PurchaseModalProps {
   rank: Rank | null;
@@ -30,9 +38,12 @@ export default function PurchaseModal({
   duration,
   onClose,
 }: PurchaseModalProps) {
+  const { actor } = useActor();
   const [username, setUsername] = useState("");
   const [usernameError, setUsernameError] = useState("");
   const [step, setStep] = useState<"username" | "discord">("username");
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [saveOrderError, setSaveOrderError] = useState("");
 
   if (!rank) return null;
 
@@ -43,7 +54,7 @@ export default function PurchaseModal({
       : Number(rank.seasonalPrice);
   const durationLabel = duration === Duration.SevenDay ? "7 Days" : "Seasonal";
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     const trimmed = username.trim();
     if (!trimmed) {
       setUsernameError("Please enter your Minecraft username.");
@@ -54,10 +65,28 @@ export default function PurchaseModal({
       return;
     }
     if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
-      setUsernameError("Only letters, numbers, and underscores allowed.");
+      setUsernameError(
+        "Minecraft usernames can only contain letters, numbers, and underscores.",
+      );
       return;
     }
     setUsernameError("");
+    setSaveOrderError("");
+
+    if (actor && rank) {
+      setIsSavingOrder(true);
+      try {
+        await actor.createOrder(trimmed, rank.name, duration, BigInt(price));
+      } catch (err) {
+        console.error("Failed to save order:", err);
+        setSaveOrderError(
+          "Order couldn't be saved, but you can still open a ticket.",
+        );
+      } finally {
+        setIsSavingOrder(false);
+      }
+    }
+
     setStep("discord");
   };
 
@@ -65,6 +94,7 @@ export default function PurchaseModal({
     setStep("username");
     setUsername("");
     setUsernameError("");
+    setSaveOrderError("");
     onClose();
   };
 
@@ -132,7 +162,7 @@ export default function PurchaseModal({
                 className="font-display font-bold text-lg"
                 style={{ color: rankColor }}
               >
-                ${price} USD
+                ₹{price} INR
               </span>
             </div>
           </div>
@@ -198,15 +228,27 @@ export default function PurchaseModal({
 
                 <Button
                   onClick={handleContinue}
+                  disabled={isSavingOrder}
                   className="w-full font-display font-black text-sm tracking-widest uppercase py-6 rounded-xl transition-all duration-200"
                   style={{
                     background: rankColor,
                     color: "oklch(0.08 0.01 280)",
-                    boxShadow: `0 0 20px ${rankColor}50`,
+                    boxShadow: isSavingOrder
+                      ? "none"
+                      : `0 0 20px ${rankColor}50`,
                   }}
                 >
-                  <ArrowRight className="w-4 h-4 mr-2" />
-                  Continue
+                  {isSavingOrder ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight className="w-4 h-4 mr-2" />
+                      Continue
+                    </>
+                  )}
                 </Button>
               </motion.div>
             ) : (
@@ -256,7 +298,7 @@ export default function PurchaseModal({
                       className="font-display font-bold text-base"
                       style={{ color: rankColor }}
                     >
-                      ${price} USD
+                      ₹{price} INR
                     </span>
                   </div>
                   <div
@@ -274,6 +316,16 @@ export default function PurchaseModal({
                   </div>
                 </div>
 
+                {/* Save order warning */}
+                {saveOrderError && (
+                  <p
+                    className="text-xs font-mono text-center"
+                    style={{ color: "oklch(0.78 0.16 85)" }}
+                  >
+                    ⚠ {saveOrderError}
+                  </p>
+                )}
+
                 {/* Instructions */}
                 <div
                   className="rounded-lg p-4 text-sm font-mono text-muted-foreground space-y-2"
@@ -290,7 +342,15 @@ export default function PurchaseModal({
                   </div>
                   <div className="flex gap-2">
                     <span style={{ color: rankColor }}>2.</span>
-                    <span>Open a ticket in the server.</span>
+                    <span>
+                      Go to the{" "}
+                      <span className="text-foreground font-bold">#shop</span>{" "}
+                      channel and create a ticket there{" "}
+                      <span className="italic">
+                        (not in the ticket channel)
+                      </span>
+                      .
+                    </span>
                   </div>
                   <div className="flex gap-2">
                     <span style={{ color: rankColor }}>3.</span>

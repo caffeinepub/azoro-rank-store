@@ -20,14 +20,14 @@ export const ShoppingItem = IDL.Record({
   'priceInCents' : IDL.Nat,
   'productDescription' : IDL.Text,
 });
+export const Duration = IDL.Variant({
+  'Seasonal' : IDL.Null,
+  'SevenDay' : IDL.Null,
+});
 export const OrderStatusCode = IDL.Variant({
   'pending' : IDL.Null,
   'fulfilled' : IDL.Null,
   'paid' : IDL.Null,
-});
-export const Duration = IDL.Variant({
-  'Seasonal' : IDL.Null,
-  'SevenDay' : IDL.Null,
 });
 export const Order = IDL.Record({
   'id' : IDL.Nat,
@@ -90,6 +90,11 @@ export const idlService = IDL.Service({
       [IDL.Text],
       [],
     ),
+  'createOrder' : IDL.Func(
+      [IDL.Text, IDL.Text, Duration, IDL.Nat],
+      [IDL.Nat],
+      [],
+    ),
   'getAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
@@ -110,6 +115,7 @@ export const idlService = IDL.Service({
       [TransformationOutput],
       ['query'],
     ),
+  'updateOrderStatus' : IDL.Func([IDL.Nat, OrderStatusCode], [IDL.Bool], []),
 });
 
 export const idlInitArgs = [];
@@ -127,14 +133,14 @@ export const idlFactory = ({ IDL }) => {
     'priceInCents' : IDL.Nat,
     'productDescription' : IDL.Text,
   });
+  const Duration = IDL.Variant({
+    'Seasonal' : IDL.Null,
+    'SevenDay' : IDL.Null,
+  });
   const OrderStatusCode = IDL.Variant({
     'pending' : IDL.Null,
     'fulfilled' : IDL.Null,
     'paid' : IDL.Null,
-  });
-  const Duration = IDL.Variant({
-    'Seasonal' : IDL.Null,
-    'SevenDay' : IDL.Null,
   });
   const Order = IDL.Record({
     'id' : IDL.Nat,
@@ -194,6 +200,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Text],
         [],
       ),
+    'createOrder' : IDL.Func(
+        [IDL.Text, IDL.Text, Duration, IDL.Nat],
+        [IDL.Nat],
+        [],
+      ),
     'getAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
@@ -214,6 +225,7 @@ export const idlFactory = ({ IDL }) => {
         [TransformationOutput],
         ['query'],
       ),
+    'updateOrderStatus' : IDL.Func([IDL.Nat, OrderStatusCode], [IDL.Bool], []),
   });
 };
 

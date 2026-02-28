@@ -9,7 +9,9 @@ import Runtime "mo:core/Runtime";
 import Time "mo:core/Time";
 import Principal "mo:core/Principal";
 import MixinAuthorization "authorization/MixinAuthorization";
+import Migration "migration";
 
+(with migration = Migration.run)
 actor {
   // Types
   public type Rank = {
@@ -52,11 +54,12 @@ actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  // Persistent state
+  // Persistent state (migrated withstood by migration revolution by order revolution new state to take form by order stood strong)
   var nextOrderId = 1;
   let orders = Map.empty<Nat, Order>();
   let userProfiles = Map.empty<Principal, UserProfile>();
   var adminClaimed = false;
+  var stripeConfig : ?Stripe.StripeConfiguration = null;
 
   // Ranks catalog
   let ranks : [Rank] = [
@@ -104,14 +107,8 @@ actor {
     },
   ];
 
-  // Stripe config
-  var stripeConfig : ?Stripe.StripeConfiguration = null;
-
   // User Profile API
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can access profiles");
-    };
     userProfiles.get(caller);
   };
 
@@ -123,9 +120,7 @@ actor {
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
-    };
+    if (caller.isAnonymous()) { Runtime.trap("Anonymous cannot save profile") };
     userProfiles.add(caller, profile);
   };
 
@@ -200,5 +195,41 @@ actor {
     accessControlState.adminAssigned := true;
     adminClaimed := true;
     true;
+  };
+
+  // New functionality
+  public shared ({ caller }) func createOrder(minecraftUsername : Text, rankName : Text, duration : Duration, priceUsd : Nat) : async Nat {
+    let orderId = nextOrderId;
+    nextOrderId += 1;
+
+    let newOrder : Order = {
+      id = orderId;
+      minecraftUsername;
+      rankName;
+      duration;
+      priceUsd;
+      status = #pending;
+      createdAt = Time.now();
+      stripeSessionId = "";
+      owner = caller;
+    };
+
+    orders.add(orderId, newOrder);
+    orderId;
+  };
+
+  public shared ({ caller }) func updateOrderStatus(orderId : Nat, newStatus : OrderStatusCode) : async Bool {
+    if (not AccessControl.hasPermission(accessControlState, caller, #admin)) {
+      Runtime.trap("Unauthorized: Only admins can update order status");
+    };
+
+    switch (orders.get(orderId)) {
+      case (null) { false };
+      case (?order) {
+        let updatedOrder = { order with status = newStatus };
+        orders.add(orderId, updatedOrder);
+        true;
+      };
+    };
   };
 };
