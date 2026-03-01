@@ -2,14 +2,21 @@ import { Button } from "@/components/ui/button";
 import {
   ChevronDown,
   ExternalLink,
+  Key,
   Shield,
   ShoppingCart,
   Sword,
+  Tag,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
+import { SiDiscord } from "react-icons/si";
 import { Duration } from "../backend";
 import type { Rank } from "../backend";
+import CrateCard from "../components/CrateCard";
+import type { Crate } from "../components/CrateCard";
+import { CRATES } from "../components/CrateCard";
+import CratePurchaseModal from "../components/CratePurchaseModal";
 import OrderLookup from "../components/OrderLookup";
 import ParticleField from "../components/ParticleField";
 import PurchaseModal from "../components/PurchaseModal";
@@ -66,7 +73,10 @@ const FALLBACK_RANKS: Rank[] = [
 export default function HomePage() {
   const [duration, setDuration] = useState<Duration>(Duration.SevenDay);
   const [selectedRank, setSelectedRank] = useState<Rank | null>(null);
+  const [selectedCrate, setSelectedCrate] = useState<Crate | null>(null);
+  const [selectedCrateQuantity, setSelectedCrateQuantity] = useState(1);
   const shopRef = useRef<HTMLDivElement>(null);
+  const keysRef = useRef<HTMLDivElement>(null);
 
   const { data: ranksData, isLoading: ranksLoading } = useRanks();
   const { identity, login, loginStatus } = useInternetIdentity();
@@ -80,9 +90,18 @@ export default function HomePage() {
     shopRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const scrollToKeys = () => {
+    keysRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   const handleBuy = (rank: Rank, dur: Duration) => {
     setSelectedRank(rank);
     setDuration(dur);
+  };
+
+  const handleBuyCrate = (crate: Crate, quantity: number) => {
+    setSelectedCrate(crate);
+    setSelectedCrateQuantity(quantity);
   };
 
   const isLoggingIn = loginStatus === "logging-in";
@@ -125,7 +144,15 @@ export default function HomePage() {
               onClick={scrollToShop}
               className="text-sm font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
             >
-              Shop
+              Ranks
+            </button>
+            <button
+              type="button"
+              onClick={scrollToKeys}
+              className="text-sm font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+            >
+              <Key className="w-3 h-3" />
+              Keys
             </button>
             <a
               href="#order-lookup"
@@ -246,6 +273,60 @@ export default function HomePage() {
             </span>
           </motion.h1>
 
+          {/* Discord Boost Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35, duration: 0.5 }}
+            className="flex justify-center mb-6"
+          >
+            <a
+              href="https://discord.gg/zWATKsTFzx"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full transition-all duration-300 hover:scale-105 hover:brightness-110"
+              style={{
+                background: "oklch(0.42 0.19 265 / 0.25)",
+                border: "1px solid oklch(0.58 0.22 265 / 0.55)",
+                boxShadow:
+                  "0 0 24px oklch(0.55 0.22 265 / 0.4), inset 0 1px 0 oklch(0.7 0.18 265 / 0.2)",
+                textDecoration: "none",
+              }}
+            >
+              <SiDiscord
+                className="w-4 h-4 flex-shrink-0"
+                style={{ color: "#7289DA" }}
+              />
+              <span
+                className="font-mono text-sm font-bold tracking-wide"
+                style={{ color: "oklch(0.88 0.1 265)" }}
+              >
+                Boost our Discord server
+              </span>
+              <span
+                className="hidden sm:inline text-xs font-mono"
+                style={{ color: "oklch(0.65 0.12 265)" }}
+              >
+                →
+              </span>
+              <span
+                className="hidden sm:inline font-display font-black text-sm tracking-widest"
+                style={{
+                  color: "oklch(0.82 0.18 310)",
+                  textShadow: "0 0 10px oklch(0.68 0.22 310 / 0.7)",
+                }}
+              >
+                BOOSTER RANK
+              </span>
+              <span
+                className="hidden sm:inline text-xs font-mono"
+                style={{ color: "oklch(0.65 0.12 265)" }}
+              >
+                in AZOROMC — FREE
+              </span>
+            </a>
+          </motion.div>
+
           {/* Tagline */}
           <motion.p
             initial={{ opacity: 0, y: 20 }}
@@ -287,6 +368,20 @@ export default function HomePage() {
             >
               <ShoppingCart className="w-4 h-4 mr-2 group-hover:animate-bounce" />
               Shop Ranks
+            </Button>
+            <Button
+              onClick={scrollToKeys}
+              size="lg"
+              className="font-display font-bold text-sm uppercase tracking-widest px-8 py-6 rounded-xl group"
+              style={{
+                background: "oklch(0.68 0.22 310 / 0.15)",
+                border: "1px solid oklch(0.68 0.22 310 / 0.5)",
+                color: "oklch(0.78 0.18 310)",
+                boxShadow: "0 0 20px oklch(0.68 0.22 310 / 0.2)",
+              }}
+            >
+              <Key className="w-4 h-4 mr-2 group-hover:animate-bounce" />
+              Shop Keys
             </Button>
             <Button
               size="lg"
@@ -432,6 +527,139 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── KEY STORE SECTION ── */}
+      <section ref={keysRef} id="keys" className="relative py-24 px-4">
+        {/* BG */}
+        <div className="absolute inset-0 pixel-grid opacity-20" />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(180deg, transparent, oklch(0.08 0.015 280 / 0.4), transparent)",
+          }}
+        />
+
+        <div className="container max-w-6xl mx-auto relative">
+          {/* Section header */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-12"
+          >
+            <div
+              className="inline-flex items-center gap-2 mb-4 px-3 py-1 rounded-full font-mono text-xs uppercase tracking-widest"
+              style={{
+                background: "oklch(0.68 0.22 310 / 0.1)",
+                border: "1px solid oklch(0.68 0.22 310 / 0.3)",
+                color: "oklch(0.68 0.22 310)",
+              }}
+            >
+              <Key className="w-3 h-3" />
+              Key Store
+            </div>
+            <h2 className="font-display font-black text-4xl md:text-5xl text-foreground mb-3">
+              Unlock{" "}
+              <span style={{ color: "oklch(0.68 0.22 310)" }}>
+                Crate Rewards
+              </span>
+            </h2>
+            <p className="text-muted-foreground font-mono text-sm max-w-md mx-auto">
+              Buy keys to open exclusive crates. Rare loot, unique items, and
+              special rewards await inside.
+            </p>
+          </motion.div>
+
+          {/* Bundle offer banner */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+            className="mb-8"
+          >
+            <div
+              className="relative flex items-center justify-center gap-3 px-6 py-4 rounded-2xl overflow-hidden"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.68 0.22 310 / 0.12) 0%, oklch(0.55 0.22 290 / 0.12) 100%)",
+                border: "1px solid oklch(0.68 0.22 310 / 0.45)",
+                boxShadow:
+                  "0 0 30px oklch(0.68 0.22 310 / 0.18), inset 0 1px 0 oklch(0.78 0.18 310 / 0.15)",
+              }}
+            >
+              {/* Animated glow pulse */}
+              <div
+                className="absolute inset-0 rounded-2xl animate-pulse"
+                style={{
+                  background:
+                    "radial-gradient(ellipse at center, oklch(0.68 0.22 310 / 0.07) 0%, transparent 70%)",
+                  pointerEvents: "none",
+                }}
+              />
+
+              <Tag
+                className="w-5 h-5 flex-shrink-0"
+                style={{ color: "oklch(0.78 0.18 310)" }}
+              />
+              <div className="flex flex-wrap items-center justify-center gap-2 text-center">
+                <span
+                  className="font-display font-black text-base sm:text-lg tracking-wide"
+                  style={{ color: "oklch(0.88 0.12 310)" }}
+                >
+                  Buy any 3 Keys
+                </span>
+                <span
+                  className="font-mono text-sm"
+                  style={{ color: "oklch(0.65 0.1 310)" }}
+                >
+                  and get
+                </span>
+                <span
+                  className="font-display font-black text-xl sm:text-2xl tracking-tight"
+                  style={{
+                    color: "oklch(0.68 0.22 142)",
+                    textShadow: "0 0 16px oklch(0.68 0.22 142 / 0.7)",
+                  }}
+                >
+                  25% OFF
+                </span>
+                <span
+                  className="font-mono text-sm"
+                  style={{ color: "oklch(0.65 0.1 310)" }}
+                >
+                  your total
+                </span>
+              </div>
+
+              <div
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full font-mono text-xs font-bold tracking-widest flex-shrink-0"
+                style={{
+                  background: "oklch(0.68 0.22 142 / 0.2)",
+                  border: "1px solid oklch(0.68 0.22 142 / 0.5)",
+                  color: "oklch(0.68 0.22 142)",
+                }}
+              >
+                Select 3 below
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Crate cards grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+            {CRATES.map((crate, i) => (
+              <CrateCard
+                key={crate.name}
+                crate={crate}
+                onBuy={handleBuyCrate}
+                index={i}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── ORDER LOOKUP ── */}
       <OrderLookup />
 
@@ -497,6 +725,18 @@ export default function HomePage() {
           rank={selectedRank}
           duration={duration}
           onClose={() => setSelectedRank(null)}
+        />
+      )}
+
+      {/* ── CRATE PURCHASE MODAL ── */}
+      {selectedCrate && (
+        <CratePurchaseModal
+          crate={selectedCrate}
+          quantity={selectedCrateQuantity}
+          onClose={() => {
+            setSelectedCrate(null);
+            setSelectedCrateQuantity(1);
+          }}
         />
       )}
     </div>

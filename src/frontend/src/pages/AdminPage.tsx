@@ -17,6 +17,7 @@ import {
   CreditCard,
   Eye,
   EyeOff,
+  Key,
   Loader2,
   Lock,
   Package,
@@ -50,6 +51,13 @@ const STATUS_STYLES: Record<OrderStatusCode, { label: string; color: string }> =
       color: "oklch(0.62 0.2 264)",
     },
   };
+
+const CRATE_NAMES = new Set([
+  "Monthly Crate",
+  "Epic Crate",
+  "Party Crate",
+  "Classic Crate",
+]);
 
 export default function AdminPage() {
   const { identity, login, clear, loginStatus } = useInternetIdentity();
@@ -367,63 +375,70 @@ export default function AdminPage() {
             className="space-y-8"
           >
             {/* Stats row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                {
-                  label: "Total Orders",
-                  value: orders?.length ?? 0,
-                  icon: Package,
-                  color: "oklch(0.78 0.16 85)",
-                },
-                {
-                  label: "Pending",
-                  value:
-                    orders?.filter((o) => o.status === OrderStatusCode.pending)
-                      .length ?? 0,
-                  icon: Clock,
-                  color: "oklch(0.78 0.16 85)",
-                },
-                {
-                  label: "Paid",
-                  value:
-                    orders?.filter((o) => o.status === OrderStatusCode.paid)
-                      .length ?? 0,
-                  icon: CheckCircle2,
-                  color: "oklch(0.68 0.22 142)",
-                },
-                {
-                  label: "Fulfilled",
-                  value:
-                    orders?.filter(
-                      (o) => o.status === OrderStatusCode.fulfilled,
-                    ).length ?? 0,
-                  icon: Users,
-                  color: "oklch(0.62 0.2 264)",
-                },
-              ].map(({ label, value, icon: Icon, color }) => (
-                <div
-                  key={label}
-                  className="rounded-xl p-4"
-                  style={{
-                    background: "oklch(0.1 0.015 280)",
-                    border: `1px solid ${color}30`,
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icon className="w-4 h-4" style={{ color }} />
-                    <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                      {label}
-                    </span>
-                  </div>
-                  <div
-                    className="font-display font-black text-3xl"
-                    style={{ color }}
-                  >
-                    {value}
-                  </div>
+            {(() => {
+              const rankOrders =
+                orders?.filter((o) => !CRATE_NAMES.has(o.rankName)) ?? [];
+              const crateOrders =
+                orders?.filter((o) => CRATE_NAMES.has(o.rankName)) ?? [];
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    {
+                      label: "Rank Orders",
+                      value: rankOrders.length,
+                      icon: Package,
+                      color: "oklch(0.78 0.16 85)",
+                    },
+                    {
+                      label: "Crate Orders",
+                      value: crateOrders.length,
+                      icon: Key,
+                      color: "oklch(0.68 0.22 310)",
+                    },
+                    {
+                      label: "Pending",
+                      value:
+                        orders?.filter(
+                          (o) => o.status === OrderStatusCode.pending,
+                        ).length ?? 0,
+                      icon: Clock,
+                      color: "oklch(0.78 0.16 85)",
+                    },
+                    {
+                      label: "Fulfilled",
+                      value:
+                        orders?.filter(
+                          (o) => o.status === OrderStatusCode.fulfilled,
+                        ).length ?? 0,
+                      icon: Users,
+                      color: "oklch(0.62 0.2 264)",
+                    },
+                  ].map(({ label, value, icon: Icon, color }) => (
+                    <div
+                      key={label}
+                      className="rounded-xl p-4"
+                      style={{
+                        background: "oklch(0.1 0.015 280)",
+                        border: `1px solid ${color}30`,
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon className="w-4 h-4" style={{ color }} />
+                        <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                          {label}
+                        </span>
+                      </div>
+                      <div
+                        className="font-display font-black text-3xl"
+                        style={{ color }}
+                      >
+                        {value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
 
             {/* Stripe Configuration */}
             <div
@@ -594,7 +609,7 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Orders table */}
+            {/* Rank Orders table */}
             <div
               className="rounded-2xl overflow-hidden"
               style={{
@@ -610,16 +625,18 @@ export default function AdminPage() {
                   className="w-4 h-4"
                   style={{ color: "oklch(0.78 0.16 85)" }}
                 />
-                <h3 className="font-display font-bold text-lg">All Orders</h3>
+                <h3 className="font-display font-bold text-lg">Rank Orders</h3>
               </div>
 
               {ordersLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : !orders || orders.length === 0 ? (
+              ) : !orders ||
+                orders.filter((o) => !CRATE_NAMES.has(o.rankName)).length ===
+                  0 ? (
                 <div className="text-center py-16 text-muted-foreground font-mono text-sm">
-                  No orders yet.
+                  No rank orders yet.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -650,85 +667,238 @@ export default function AdminPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {orders.map((order) => {
-                        const statusStyle =
-                          STATUS_STYLES[order.status] ||
-                          STATUS_STYLES[OrderStatusCode.pending];
-                        const durationLabel =
-                          order.duration === Duration.SevenDay
-                            ? "7 Days"
-                            : "Seasonal";
-                        const date = new Date(
-                          Number(order.createdAt) / 1_000_000,
-                        ).toLocaleDateString();
-                        return (
-                          <TableRow
-                            key={order.id.toString()}
-                            className="border-b"
-                            style={{ borderColor: "oklch(0.15 0.02 280)" }}
-                          >
-                            <TableCell className="font-mono text-xs text-muted-foreground">
-                              #{order.id.toString()}
-                            </TableCell>
-                            <TableCell className="font-mono font-bold text-sm text-foreground">
-                              {order.minecraftUsername}
-                            </TableCell>
-                            <TableCell className="font-display font-bold text-sm">
-                              {order.rankName}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs text-muted-foreground">
-                              {durationLabel}
-                            </TableCell>
-                            <TableCell className="font-mono text-sm">
-                              ₹{Number(order.priceUsd)}
-                            </TableCell>
-                            <TableCell>
-                              <span
-                                className="px-2 py-0.5 rounded font-mono text-xs font-bold"
-                                style={{
-                                  background: `${statusStyle.color}20`,
-                                  color: statusStyle.color,
-                                }}
-                              >
-                                {statusStyle.label}
-                              </span>
-                            </TableCell>
-                            <TableCell className="font-mono text-xs text-muted-foreground">
-                              {date}
-                            </TableCell>
-                            <TableCell>
-                              {order.status === OrderStatusCode.fulfilled ? (
+                      {orders
+                        .filter((o) => !CRATE_NAMES.has(o.rankName))
+                        .map((order) => {
+                          const statusStyle =
+                            STATUS_STYLES[order.status] ||
+                            STATUS_STYLES[OrderStatusCode.pending];
+                          const durationLabel =
+                            order.duration === Duration.SevenDay
+                              ? "7 Days"
+                              : "Seasonal";
+                          const date = new Date(
+                            Number(order.createdAt) / 1_000_000,
+                          ).toLocaleDateString();
+                          return (
+                            <TableRow
+                              key={order.id.toString()}
+                              className="border-b"
+                              style={{ borderColor: "oklch(0.15 0.02 280)" }}
+                            >
+                              <TableCell className="font-mono text-xs text-muted-foreground">
+                                #{order.id.toString()}
+                              </TableCell>
+                              <TableCell className="font-mono font-bold text-sm text-foreground">
+                                {order.minecraftUsername}
+                              </TableCell>
+                              <TableCell className="font-display font-bold text-sm">
+                                {order.rankName}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-muted-foreground">
+                                {durationLabel}
+                              </TableCell>
+                              <TableCell className="font-mono text-sm">
+                                ₹{Number(order.priceUsd)}
+                              </TableCell>
+                              <TableCell>
                                 <span
-                                  className="flex items-center gap-1 font-mono text-xs"
-                                  style={{ color: "oklch(0.62 0.2 264)" }}
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Done
-                                </span>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  disabled={fulfillingOrderId === order.id}
-                                  onClick={() => handleFulfillOrder(order.id)}
-                                  className="font-mono text-xs uppercase tracking-widest h-7 px-2"
+                                  className="px-2 py-0.5 rounded font-mono text-xs font-bold"
                                   style={{
-                                    background: "oklch(0.62 0.2 264 / 0.15)",
-                                    color: "oklch(0.62 0.2 264)",
-                                    border:
-                                      "1px solid oklch(0.62 0.2 264 / 0.4)",
+                                    background: `${statusStyle.color}20`,
+                                    color: statusStyle.color,
                                   }}
                                 >
-                                  {fulfillingOrderId === order.id ? (
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    "Mark Fulfilled"
-                                  )}
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
+                                  {statusStyle.label}
+                                </span>
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-muted-foreground">
+                                {date}
+                              </TableCell>
+                              <TableCell>
+                                {order.status === OrderStatusCode.fulfilled ? (
+                                  <span
+                                    className="flex items-center gap-1 font-mono text-xs"
+                                    style={{ color: "oklch(0.62 0.2 264)" }}
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    Done
+                                  </span>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    disabled={fulfillingOrderId === order.id}
+                                    onClick={() => handleFulfillOrder(order.id)}
+                                    className="font-mono text-xs uppercase tracking-widest h-7 px-2"
+                                    style={{
+                                      background: "oklch(0.62 0.2 264 / 0.15)",
+                                      color: "oklch(0.62 0.2 264)",
+                                      border:
+                                        "1px solid oklch(0.62 0.2 264 / 0.4)",
+                                    }}
+                                  >
+                                    {fulfillingOrderId === order.id ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      "Mark Fulfilled"
+                                    )}
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+
+            {/* Crate Orders table */}
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{
+                background: "oklch(0.1 0.015 280)",
+                border: "1px solid oklch(0.68 0.22 310 / 0.25)",
+              }}
+            >
+              <div
+                className="px-6 py-4 flex items-center gap-3"
+                style={{ borderBottom: "1px solid oklch(0.18 0.03 280)" }}
+              >
+                <Key
+                  className="w-4 h-4"
+                  style={{ color: "oklch(0.68 0.22 310)" }}
+                />
+                <h3 className="font-display font-bold text-lg">Crate Orders</h3>
+                <span
+                  className="ml-auto px-2 py-0.5 rounded font-mono text-xs font-bold"
+                  style={{
+                    background: "oklch(0.68 0.22 310 / 0.15)",
+                    color: "oklch(0.68 0.22 310)",
+                  }}
+                >
+                  {orders?.filter((o) => CRATE_NAMES.has(o.rankName)).length ??
+                    0}{" "}
+                  orders
+                </span>
+              </div>
+
+              {ordersLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : !orders ||
+                orders.filter((o) => CRATE_NAMES.has(o.rankName)).length ===
+                  0 ? (
+                <div className="text-center py-16 text-muted-foreground font-mono text-sm">
+                  No crate orders yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow
+                        style={{
+                          borderBottom: "1px solid oklch(0.18 0.03 280)",
+                        }}
+                      >
+                        {[
+                          "ID",
+                          "Username",
+                          "Crate",
+                          "Price",
+                          "Status",
+                          "Date",
+                          "Actions",
+                        ].map((h) => (
+                          <TableHead
+                            key={h}
+                            className="font-mono text-xs uppercase tracking-widest text-muted-foreground"
+                          >
+                            {h}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orders
+                        .filter((o) => CRATE_NAMES.has(o.rankName))
+                        .map((order) => {
+                          const statusStyle =
+                            STATUS_STYLES[order.status] ||
+                            STATUS_STYLES[OrderStatusCode.pending];
+                          const date = new Date(
+                            Number(order.createdAt) / 1_000_000,
+                          ).toLocaleDateString();
+                          return (
+                            <TableRow
+                              key={order.id.toString()}
+                              className="border-b"
+                              style={{ borderColor: "oklch(0.15 0.02 280)" }}
+                            >
+                              <TableCell className="font-mono text-xs text-muted-foreground">
+                                #{order.id.toString()}
+                              </TableCell>
+                              <TableCell className="font-mono font-bold text-sm text-foreground">
+                                {order.minecraftUsername}
+                              </TableCell>
+                              <TableCell
+                                className="font-display font-bold text-sm"
+                                style={{ color: "oklch(0.68 0.22 310)" }}
+                              >
+                                {order.rankName}
+                              </TableCell>
+                              <TableCell className="font-mono text-sm">
+                                ₹{Number(order.priceUsd)}
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  className="px-2 py-0.5 rounded font-mono text-xs font-bold"
+                                  style={{
+                                    background: `${statusStyle.color}20`,
+                                    color: statusStyle.color,
+                                  }}
+                                >
+                                  {statusStyle.label}
+                                </span>
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-muted-foreground">
+                                {date}
+                              </TableCell>
+                              <TableCell>
+                                {order.status === OrderStatusCode.fulfilled ? (
+                                  <span
+                                    className="flex items-center gap-1 font-mono text-xs"
+                                    style={{ color: "oklch(0.62 0.2 264)" }}
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    Done
+                                  </span>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    disabled={fulfillingOrderId === order.id}
+                                    onClick={() => handleFulfillOrder(order.id)}
+                                    className="font-mono text-xs uppercase tracking-widest h-7 px-2"
+                                    style={{
+                                      background: "oklch(0.68 0.22 310 / 0.15)",
+                                      color: "oklch(0.68 0.22 310)",
+                                      border:
+                                        "1px solid oklch(0.68 0.22 310 / 0.4)",
+                                    }}
+                                  >
+                                    {fulfillingOrderId === order.id ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      "Mark Fulfilled"
+                                    )}
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                     </TableBody>
                   </Table>
                 </div>
