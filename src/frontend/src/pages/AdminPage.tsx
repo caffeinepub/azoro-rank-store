@@ -9,8 +9,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { Principal } from "@icp-sdk/core/principal";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  Activity,
   ArrowLeft,
   CheckCircle2,
   Clock,
@@ -22,6 +24,8 @@ import {
   Lock,
   Package,
   Shield,
+  Trash2,
+  UserMinus,
   Users,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -30,9 +34,11 @@ import { toast } from "sonner";
 import { Duration, OrderStatusCode } from "../backend";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import type { ActivityLogEntry } from "../hooks/useQueries";
 import {
+  useActivityLog,
+  useAdminList,
   useAllOrders,
-  useIsAdmin,
   useIsStripeConfigured,
 } from "../hooks/useQueries";
 
@@ -59,22 +65,32 @@ const CRATE_NAMES = new Set([
   "Classic Crate",
 ]);
 
+// ─── Main Admin Page ──────────────────────────────────────────────────────────
+
 export default function AdminPage() {
   const { identity, login, clear, loginStatus } = useInternetIdentity();
-  const isLoggedIn = !!identity;
   const isLoggingIn = loginStatus === "logging-in";
 
-  const { data: isAdmin, isLoading: adminLoading } = useIsAdmin();
   const { data: orders, isLoading: ordersLoading } = useAllOrders();
+  const { data: adminList, isLoading: adminListLoading } = useAdminList();
+  const { data: activityLog, isLoading: activityLogLoading } = useActivityLog();
   const { actor } = useActor();
 
   const queryClient = useQueryClient();
-  const [isClaiming, setIsClaiming] = useState(false);
-  const [claimSuccess, setClaimSuccess] = useState(false);
-  const [claimFailed, setClaimFailed] = useState(false);
+
+  // Code-based auth state
+  const [adminCode, setAdminCode] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isCodeVerified, setIsCodeVerified] = useState(false);
+  const [codeError, setCodeError] = useState("");
+
   const [fulfillingOrderId, setFulfillingOrderId] = useState<bigint | null>(
     null,
   );
+  const [deletingOrderId, setDeletingOrderId] = useState<bigint | null>(null);
+  const [removingAdminPrincipal, setRemovingAdminPrincipal] = useState<
+    string | null
+  >(null);
 
   const { data: isStripeConfigured, isLoading: stripeConfigLoading } =
     useIsStripeConfigured();
@@ -82,24 +98,60 @@ export default function AdminPage() {
   const [showStripeKey, setShowStripeKey] = useState(false);
   const [isSavingStripe, setIsSavingStripe] = useState(false);
 
-  const handleClaimAdmin = async () => {
-    if (!actor) return;
-    setIsClaiming(true);
-    setClaimSuccess(false);
-    setClaimFailed(false);
-    try {
-      const result = await actor.claimFirstAdmin();
-      if (result) {
-        setClaimSuccess(true);
-        await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-      } else {
-        setClaimFailed(true);
-      }
-    } catch {
-      setClaimFailed(true);
-    } finally {
-      setIsClaiming(false);
+  const handleCodeLogin = async () => {
+    const code = adminCode.trim();
+    if (!code) {
+      setCodeError("Please enter the admin code.");
+      return;
     }
+    setIsVerifying(true);
+    setCodeError("");
+
+    try {
+      // Silently get an identity first if we don't have one
+      if (!identity) {
+        await login();
+        // Give React time to update identity state
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+
+      // Wait for actor to be available (it depends on identity)
+      let attempts = 0;
+      while (!actor && attempts < 20) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        attempts++;
+      }
+
+      if (!actor) {
+        setCodeError("Failed to connect. Please try again.");
+        setIsVerifying(false);
+        return;
+      }
+
+      const success = await actor.loginWithAdminCode(code);
+      if (success) {
+        setIsCodeVerified(true);
+        setAdminCode("");
+        await queryClient.invalidateQueries({ queryKey: ["allOrders"] });
+        await queryClient.invalidateQueries({
+          queryKey: ["isStripeConfigured"],
+        });
+      } else {
+        setCodeError("Wrong code. Try again.");
+      }
+    } catch (err) {
+      console.error(err);
+      setCodeError("Something went wrong. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleSignOut = () => {
+    clear();
+    setIsCodeVerified(false);
+    setAdminCode("");
+    setCodeError("");
   };
 
   const handleFulfillOrder = async (orderId: bigint) => {
@@ -121,6 +173,45 @@ export default function AdminPage() {
       toast.error("Something went wrong. Please try again.");
     } finally {
       setFulfillingOrderId(null);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: bigint) => {
+    if (!actor) return;
+    setDeletingOrderId(orderId);
+    try {
+      const success = await actor.deleteOrder(orderId);
+      if (success) {
+        toast.success("Order deleted");
+        await queryClient.invalidateQueries({ queryKey: ["allOrders"] });
+      } else {
+        toast.error("Failed to delete order.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setDeletingOrderId(null);
+    }
+  };
+
+  const handleRemoveAdmin = async (principal: Principal) => {
+    if (!actor) return;
+    const principalText = principal.toText();
+    setRemovingAdminPrincipal(principalText);
+    try {
+      const success = await actor.removeAdmin(principal);
+      if (success) {
+        toast.success("Admin removed");
+        await queryClient.invalidateQueries({ queryKey: ["adminList"] });
+      } else {
+        toast.error("Failed to remove admin");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to remove admin");
+    } finally {
+      setRemovingAdminPrincipal(null);
     }
   };
 
@@ -191,27 +282,22 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {isLoggedIn && (
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-mono text-muted-foreground hidden sm:block">
-                {identity?.getPrincipal().toString().slice(0, 12)}…
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={clear}
-                className="text-xs font-mono uppercase tracking-widest"
-              >
-                Sign Out
-              </Button>
-            </div>
+          {isCodeVerified && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSignOut}
+              className="text-xs font-mono uppercase tracking-widest"
+            >
+              Sign Out
+            </Button>
           )}
         </div>
       </header>
 
       <main className="container max-w-6xl mx-auto px-4 py-12">
-        {/* Not logged in */}
-        {!isLoggedIn && (
+        {/* Code login screen */}
+        {!isCodeVerified && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -222,6 +308,7 @@ export default function AdminPage() {
               style={{
                 background: "oklch(0.78 0.16 85 / 0.1)",
                 border: "1px solid oklch(0.78 0.16 85 / 0.3)",
+                boxShadow: "0 0 30px oklch(0.78 0.16 85 / 0.08)",
               }}
             >
               <Lock
@@ -233,142 +320,83 @@ export default function AdminPage() {
               Admin Access
             </h2>
             <p className="text-muted-foreground font-mono text-sm max-w-xs mb-8">
-              Sign in with Internet Identity to access the admin dashboard.
-            </p>
-            <Button
-              onClick={login}
-              disabled={isLoggingIn}
-              size="lg"
-              className="font-display font-bold uppercase tracking-widest px-8 py-5"
-              style={{
-                background: "oklch(0.78 0.16 85)",
-                color: "oklch(0.08 0.01 280)",
-                boxShadow: "0 0 20px oklch(0.78 0.16 85 / 0.3)",
-              }}
-            >
-              {isLoggingIn ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Signing In…
-                </>
-              ) : (
-                <>
-                  <Shield className="w-4 h-4 mr-2" />
-                  Sign In
-                </>
-              )}
-            </Button>
-          </motion.div>
-        )}
-
-        {/* Logged in but loading admin status */}
-        {isLoggedIn && adminLoading && (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          </div>
-        )}
-
-        {/* Not admin */}
-        {isLoggedIn && !adminLoading && !isAdmin && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center py-24 text-center"
-          >
-            <div
-              className="w-20 h-20 rounded-2xl flex items-center justify-center mb-6"
-              style={{
-                background: "oklch(0.62 0.22 25 / 0.1)",
-                border: "1px solid oklch(0.62 0.22 25 / 0.3)",
-              }}
-            >
-              <Lock
-                className="w-8 h-8"
-                style={{ color: "oklch(0.62 0.22 25)" }}
-              />
-            </div>
-            <h2 className="font-display font-black text-3xl mb-2 text-foreground">
-              Access Denied
-            </h2>
-            <p className="text-muted-foreground font-mono text-sm max-w-xs mb-6">
-              Your account does not have admin privileges.
+              Enter the admin code to access the dashboard.
             </p>
 
-            {/* Claim Admin section */}
             <div
-              className="w-full max-w-sm rounded-2xl p-6 mb-6 text-center"
+              className="w-full max-w-sm rounded-2xl p-6"
               style={{
                 background: "oklch(0.1 0.015 280)",
-                border: "1px solid oklch(0.78 0.16 85 / 0.25)",
-                boxShadow: "0 0 30px oklch(0.78 0.16 85 / 0.06)",
+                border: "1px solid oklch(0.78 0.16 85 / 0.2)",
+                boxShadow: "0 0 40px oklch(0.78 0.16 85 / 0.05)",
               }}
             >
-              <Shield
-                className="w-8 h-8 mx-auto mb-3"
-                style={{ color: "oklch(0.78 0.16 85)" }}
-              />
-              <p className="font-mono text-xs text-muted-foreground mb-5">
-                If no admin has been claimed yet, you can become the first
-                admin.
-              </p>
+              <div className="space-y-4">
+                <div className="space-y-2 text-left">
+                  <Label
+                    htmlFor="admin-code"
+                    className="text-xs font-mono uppercase tracking-widest text-muted-foreground"
+                  >
+                    Admin Code
+                  </Label>
+                  <Input
+                    id="admin-code"
+                    type="password"
+                    value={adminCode}
+                    onChange={(e) => {
+                      setAdminCode(e.target.value);
+                      if (codeError) setCodeError("");
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !isVerifying) handleCodeLogin();
+                    }}
+                    placeholder="Enter admin code"
+                    className="font-mono text-sm bg-secondary border-border"
+                    disabled={isVerifying || isLoggingIn}
+                    autoFocus
+                  />
+                  {codeError && (
+                    <p
+                      className="font-mono text-xs"
+                      style={{ color: "oklch(0.62 0.22 25)" }}
+                    >
+                      {codeError}
+                    </p>
+                  )}
+                </div>
 
-              <Button
-                onClick={handleClaimAdmin}
-                disabled={isClaiming || claimSuccess}
-                className="w-full font-display font-bold uppercase tracking-widest text-sm"
-                style={{
-                  background: "oklch(0.78 0.16 85)",
-                  color: "oklch(0.08 0.01 280)",
-                  boxShadow: isClaiming
-                    ? "none"
-                    : "0 0 16px oklch(0.78 0.16 85 / 0.3)",
-                }}
-              >
-                {isClaiming ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Claiming…
-                  </>
-                ) : (
-                  <>
-                    <Shield className="w-4 h-4 mr-2" />
-                    Claim Admin
-                  </>
-                )}
-              </Button>
-
-              {claimSuccess && (
-                <p
-                  className="font-mono text-xs text-center mt-3"
-                  style={{ color: "oklch(0.68 0.22 142)" }}
+                <Button
+                  onClick={handleCodeLogin}
+                  disabled={isVerifying || isLoggingIn || !adminCode.trim()}
+                  className="w-full font-display font-bold uppercase tracking-widest text-sm"
+                  style={{
+                    background: "oklch(0.78 0.16 85)",
+                    color: "oklch(0.08 0.01 280)",
+                    boxShadow:
+                      isVerifying || isLoggingIn
+                        ? "none"
+                        : "0 0 20px oklch(0.78 0.16 85 / 0.3)",
+                  }}
                 >
-                  You are now admin! Refreshing…
-                </p>
-              )}
-
-              {claimFailed && !isClaiming && (
-                <p
-                  className="font-mono text-xs text-center mt-3"
-                  style={{ color: "oklch(0.62 0.22 25)" }}
-                >
-                  Admin has already been claimed by another account.
-                </p>
-              )}
+                  {isVerifying || isLoggingIn ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Verifying…
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-4 h-4 mr-2" />
+                      Login
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-
-            <Button
-              variant="outline"
-              onClick={goHome}
-              className="font-mono uppercase tracking-widest text-xs"
-            >
-              <ArrowLeft className="w-3 h-3 mr-1.5" />
-              Back to Store
-            </Button>
           </motion.div>
         )}
 
         {/* Admin dashboard */}
-        {isLoggedIn && !adminLoading && isAdmin && (
+        {isCodeVerified && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -716,34 +744,338 @@ export default function AdminPage() {
                                 {date}
                               </TableCell>
                               <TableCell>
-                                {order.status === OrderStatusCode.fulfilled ? (
-                                  <span
-                                    className="flex items-center gap-1 font-mono text-xs"
-                                    style={{ color: "oklch(0.62 0.2 264)" }}
-                                  >
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    Done
-                                  </span>
-                                ) : (
+                                <div className="flex gap-2 flex-wrap">
+                                  {order.status ===
+                                  OrderStatusCode.fulfilled ? (
+                                    <span
+                                      className="flex items-center gap-1 font-mono text-xs"
+                                      style={{ color: "oklch(0.62 0.2 264)" }}
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      Done
+                                    </span>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      disabled={fulfillingOrderId === order.id}
+                                      onClick={() =>
+                                        handleFulfillOrder(order.id)
+                                      }
+                                      className="font-mono text-xs uppercase tracking-widest h-7 px-2"
+                                      style={{
+                                        background:
+                                          "oklch(0.62 0.2 264 / 0.15)",
+                                        color: "oklch(0.62 0.2 264)",
+                                        border:
+                                          "1px solid oklch(0.62 0.2 264 / 0.4)",
+                                      }}
+                                    >
+                                      {fulfillingOrderId === order.id ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        "Mark Fulfilled"
+                                      )}
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
-                                    disabled={fulfillingOrderId === order.id}
-                                    onClick={() => handleFulfillOrder(order.id)}
+                                    disabled={deletingOrderId === order.id}
+                                    onClick={() => handleDeleteOrder(order.id)}
                                     className="font-mono text-xs uppercase tracking-widest h-7 px-2"
                                     style={{
-                                      background: "oklch(0.62 0.2 264 / 0.15)",
-                                      color: "oklch(0.62 0.2 264)",
+                                      background: "oklch(0.55 0.22 25 / 0.15)",
+                                      color: "oklch(0.62 0.22 25)",
                                       border:
-                                        "1px solid oklch(0.62 0.2 264 / 0.4)",
+                                        "1px solid oklch(0.62 0.22 25 / 0.4)",
                                     }}
                                   >
-                                    {fulfillingOrderId === order.id ? (
+                                    {deletingOrderId === order.id ? (
                                       <Loader2 className="w-3 h-3 animate-spin" />
                                     ) : (
-                                      "Mark Fulfilled"
+                                      <>
+                                        <Trash2 className="w-3 h-3 mr-1" />
+                                        Delete
+                                      </>
                                     )}
                                   </Button>
-                                )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+
+            {/* ── Admin Management ── */}
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{
+                background: "oklch(0.1 0.015 280)",
+                border: "1px solid oklch(0.68 0.22 310 / 0.3)",
+              }}
+            >
+              <div
+                className="px-6 py-4 flex items-center gap-3"
+                style={{ borderBottom: "1px solid oklch(0.18 0.03 280)" }}
+              >
+                <Shield
+                  className="w-4 h-4"
+                  style={{ color: "oklch(0.68 0.22 310)" }}
+                />
+                <h3 className="font-display font-bold text-lg">
+                  Admin Management
+                </h3>
+                <span
+                  className="ml-auto px-2 py-0.5 rounded font-mono text-xs font-bold"
+                  style={{
+                    background: "oklch(0.68 0.22 310 / 0.15)",
+                    color: "oklch(0.68 0.22 310)",
+                  }}
+                >
+                  {adminList?.length ?? 0} admins
+                </span>
+              </div>
+
+              {adminListLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : !adminList || adminList.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground font-mono text-sm">
+                  No admins found.
+                </div>
+              ) : (
+                <div className="divide-y divide-[oklch(0.15_0.02_280)]">
+                  {adminList.map((principal) => {
+                    const principalText = principal.toText();
+                    const truncated =
+                      principalText.length > 20
+                        ? `${principalText.slice(0, 12)}...${principalText.slice(-6)}`
+                        : principalText;
+                    const isSelf =
+                      principalText === identity?.getPrincipal().toText();
+                    const isRemoving = removingAdminPrincipal === principalText;
+
+                    return (
+                      <div
+                        key={principalText}
+                        className="px-6 py-3 flex items-center justify-between gap-4"
+                        style={{
+                          borderBottom: "1px solid oklch(0.15 0.02 280)",
+                        }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{
+                              background: "oklch(0.68 0.22 310 / 0.12)",
+                              border: "1px solid oklch(0.68 0.22 310 / 0.3)",
+                            }}
+                          >
+                            <Shield
+                              className="w-3.5 h-3.5"
+                              style={{ color: "oklch(0.68 0.22 310)" }}
+                            />
+                          </div>
+                          <span className="font-mono text-sm text-foreground truncate">
+                            {truncated}
+                          </span>
+                          {isSelf && (
+                            <span
+                              className="px-2 py-0.5 rounded font-mono text-xs font-bold flex-shrink-0"
+                              style={{
+                                background: "oklch(0.68 0.22 142 / 0.15)",
+                                color: "oklch(0.68 0.22 142)",
+                              }}
+                            >
+                              You
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          disabled={isSelf || isRemoving}
+                          onClick={() => handleRemoveAdmin(principal)}
+                          className="font-mono text-xs uppercase tracking-widest h-7 px-3 flex-shrink-0"
+                          style={
+                            isSelf
+                              ? {
+                                  background: "oklch(0.15 0.02 280)",
+                                  color: "oklch(0.4 0.01 280)",
+                                  border: "1px solid oklch(0.2 0.02 280)",
+                                  cursor: "not-allowed",
+                                }
+                              : {
+                                  background: "oklch(0.55 0.22 25 / 0.15)",
+                                  color: "oklch(0.62 0.22 25)",
+                                  border: "1px solid oklch(0.62 0.22 25 / 0.4)",
+                                }
+                          }
+                        >
+                          {isRemoving ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <>
+                              <UserMinus className="w-3 h-3 mr-1" />
+                              Remove
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Actions Log ── */}
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{
+                background: "oklch(0.1 0.015 280)",
+                border: "1px solid oklch(0.68 0.22 142 / 0.25)",
+              }}
+            >
+              <div
+                className="px-6 py-4 flex items-center gap-3"
+                style={{ borderBottom: "1px solid oklch(0.18 0.03 280)" }}
+              >
+                <Activity
+                  className="w-4 h-4"
+                  style={{ color: "oklch(0.68 0.22 142)" }}
+                />
+                <h3 className="font-display font-bold text-lg">Actions Log</h3>
+                <span
+                  className="ml-auto px-2 py-0.5 rounded font-mono text-xs font-bold"
+                  style={{
+                    background: "oklch(0.68 0.22 142 / 0.15)",
+                    color: "oklch(0.68 0.22 142)",
+                  }}
+                >
+                  {activityLog ? Math.min(activityLog.length, 100) : 0} entries
+                </span>
+              </div>
+
+              {activityLogLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : !activityLog || activityLog.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground font-mono text-sm">
+                  No activity recorded yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow
+                        style={{
+                          borderBottom: "1px solid oklch(0.18 0.03 280)",
+                        }}
+                      >
+                        {["Who", "Action", "Details", "Date & Time"].map(
+                          (h) => (
+                            <TableHead
+                              key={h}
+                              className="font-mono text-xs uppercase tracking-widest text-muted-foreground"
+                            >
+                              {h}
+                            </TableHead>
+                          ),
+                        )}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[...activityLog]
+                        .sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1))
+                        .slice(0, 100)
+                        .map((entry: ActivityLogEntry, idx: number) => {
+                          const principalText = entry.principal.toText();
+                          const truncated =
+                            principalText.length > 20
+                              ? `${principalText.slice(0, 10)}…${principalText.slice(-6)}`
+                              : principalText;
+                          const dateStr = new Date(
+                            Number(entry.timestamp) / 1_000_000,
+                          ).toLocaleString();
+                          const key = `${principalText}-${entry.timestamp.toString()}-${idx}`;
+
+                          // Render action label + details
+                          let actionLabel: {
+                            text: string;
+                            color: string;
+                            bg: string;
+                          };
+                          let details = "";
+
+                          const action = entry.action;
+                          if (action.__kind__ === "orderDeleted") {
+                            const d = action.orderDeleted;
+                            actionLabel = {
+                              text: "Order Deleted",
+                              color: "oklch(0.62 0.22 25)",
+                              bg: "oklch(0.62 0.22 25 / 0.15)",
+                            };
+                            details = `Order #${d.orderId} — ${d.rankName} for ${d.minecraftUsername} (₹${Number(d.priceInr)})`;
+                          } else if (action.__kind__ === "orderStatusChanged") {
+                            const d = action.orderStatusChanged;
+                            actionLabel = {
+                              text: "Status Changed",
+                              color: "oklch(0.78 0.16 85)",
+                              bg: "oklch(0.78 0.16 85 / 0.15)",
+                            };
+                            details = `Order #${d.orderId} ${d.minecraftUsername} → ${d.newStatus}`;
+                          } else if (action.__kind__ === "adminLogin") {
+                            actionLabel = {
+                              text: "Admin Login",
+                              color: "oklch(0.68 0.22 142)",
+                              bg: "oklch(0.68 0.22 142 / 0.15)",
+                            };
+                            details = "Logged into admin panel";
+                          } else {
+                            // adminRemoved
+                            const d = action.adminRemoved;
+                            const removedText = d.removedPrincipal.toText();
+                            const removedTrunc =
+                              removedText.length > 20
+                                ? `${removedText.slice(0, 10)}…${removedText.slice(-6)}`
+                                : removedText;
+                            actionLabel = {
+                              text: "Admin Removed",
+                              color: "oklch(0.62 0.22 25)",
+                              bg: "oklch(0.62 0.22 25 / 0.15)",
+                            };
+                            details = `Removed ${removedTrunc}`;
+                          }
+
+                          return (
+                            <TableRow
+                              key={key}
+                              className="border-b"
+                              style={{ borderColor: "oklch(0.15 0.02 280)" }}
+                            >
+                              <TableCell className="font-mono text-xs text-muted-foreground">
+                                {truncated}
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  className="px-2 py-0.5 rounded font-mono text-xs font-bold whitespace-nowrap"
+                                  style={{
+                                    background: actionLabel.bg,
+                                    color: actionLabel.color,
+                                  }}
+                                >
+                                  {actionLabel.text}
+                                </span>
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-foreground max-w-xs truncate">
+                                {details}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                                {dateStr}
                               </TableCell>
                             </TableRow>
                           );
@@ -867,34 +1199,61 @@ export default function AdminPage() {
                                 {date}
                               </TableCell>
                               <TableCell>
-                                {order.status === OrderStatusCode.fulfilled ? (
-                                  <span
-                                    className="flex items-center gap-1 font-mono text-xs"
-                                    style={{ color: "oklch(0.62 0.2 264)" }}
-                                  >
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    Done
-                                  </span>
-                                ) : (
+                                <div className="flex gap-2 flex-wrap">
+                                  {order.status ===
+                                  OrderStatusCode.fulfilled ? (
+                                    <span
+                                      className="flex items-center gap-1 font-mono text-xs"
+                                      style={{ color: "oklch(0.62 0.2 264)" }}
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      Done
+                                    </span>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      disabled={fulfillingOrderId === order.id}
+                                      onClick={() =>
+                                        handleFulfillOrder(order.id)
+                                      }
+                                      className="font-mono text-xs uppercase tracking-widest h-7 px-2"
+                                      style={{
+                                        background:
+                                          "oklch(0.68 0.22 310 / 0.15)",
+                                        color: "oklch(0.68 0.22 310)",
+                                        border:
+                                          "1px solid oklch(0.68 0.22 310 / 0.4)",
+                                      }}
+                                    >
+                                      {fulfillingOrderId === order.id ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        "Mark Fulfilled"
+                                      )}
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
-                                    disabled={fulfillingOrderId === order.id}
-                                    onClick={() => handleFulfillOrder(order.id)}
+                                    disabled={deletingOrderId === order.id}
+                                    onClick={() => handleDeleteOrder(order.id)}
                                     className="font-mono text-xs uppercase tracking-widest h-7 px-2"
                                     style={{
-                                      background: "oklch(0.68 0.22 310 / 0.15)",
-                                      color: "oklch(0.68 0.22 310)",
+                                      background: "oklch(0.55 0.22 25 / 0.15)",
+                                      color: "oklch(0.62 0.22 25)",
                                       border:
-                                        "1px solid oklch(0.68 0.22 310 / 0.4)",
+                                        "1px solid oklch(0.62 0.22 25 / 0.4)",
                                     }}
                                   >
-                                    {fulfillingOrderId === order.id ? (
+                                    {deletingOrderId === order.id ? (
                                       <Loader2 className="w-3 h-3 animate-spin" />
                                     ) : (
-                                      "Mark Fulfilled"
+                                      <>
+                                        <Trash2 className="w-3 h-3 mr-1" />
+                                        Delete
+                                      </>
                                     )}
                                   </Button>
-                                )}
+                                </div>
                               </TableCell>
                             </TableRow>
                           );

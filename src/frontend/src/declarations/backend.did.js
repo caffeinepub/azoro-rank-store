@@ -44,6 +44,10 @@ export const UserProfile = IDL.Record({
   'name' : IDL.Text,
   'minecraftUsername' : IDL.Opt(IDL.Text),
 });
+export const LoginLogEntry = IDL.Record({
+  'principal' : IDL.Principal,
+  'timestamp' : IDL.Int,
+});
 export const Rank = IDL.Record({
   'name' : IDL.Text,
   'color' : IDL.Text,
@@ -95,9 +99,12 @@ export const idlService = IDL.Service({
       [IDL.Nat],
       [],
     ),
+  'deleteOrder' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+  'getAdminList' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
   'getAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getLoginLog' : IDL.Func([], [IDL.Vec(LoginLogEntry)], ['query']),
   'getOrdersByUsername' : IDL.Func([IDL.Text], [IDL.Vec(Order)], ['query']),
   'getRanks' : IDL.Func([], [IDL.Vec(Rank)], ['query']),
   'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
@@ -108,6 +115,8 @@ export const idlService = IDL.Service({
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
+  'loginWithAdminCode' : IDL.Func([IDL.Text], [IDL.Bool], []),
+  'removeAdmin' : IDL.Func([IDL.Principal], [IDL.Bool], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
   'transform' : IDL.Func(
@@ -157,6 +166,10 @@ export const idlFactory = ({ IDL }) => {
     'name' : IDL.Text,
     'minecraftUsername' : IDL.Opt(IDL.Text),
   });
+  const LoginLogEntry = IDL.Record({
+    'principal' : IDL.Principal,
+    'timestamp' : IDL.Int,
+  });
   const Rank = IDL.Record({
     'name' : IDL.Text,
     'color' : IDL.Text,
@@ -205,9 +218,12 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Nat],
         [],
       ),
+    'deleteOrder' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+    'getAdminList' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
     'getAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getLoginLog' : IDL.Func([], [IDL.Vec(LoginLogEntry)], ['query']),
     'getOrdersByUsername' : IDL.Func([IDL.Text], [IDL.Vec(Order)], ['query']),
     'getRanks' : IDL.Func([], [IDL.Vec(Rank)], ['query']),
     'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
@@ -218,6 +234,8 @@ export const idlFactory = ({ IDL }) => {
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
+    'loginWithAdminCode' : IDL.Func([IDL.Text], [IDL.Bool], []),
+    'removeAdmin' : IDL.Func([IDL.Principal], [IDL.Bool], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
     'transform' : IDL.Func(

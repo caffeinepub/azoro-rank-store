@@ -1,6 +1,50 @@
+import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import type { Order, Rank, ShoppingItem, UserProfile } from "../backend";
+import type {
+  LoginLogEntry,
+  Order,
+  OrderStatusCode,
+  Rank,
+  ShoppingItem,
+  UserProfile,
+} from "../backend";
 import { useActor } from "./useActor";
+
+// Activity log types (defined locally since backend.d.ts is protected)
+export type ActivityAction =
+  | {
+      __kind__: "orderDeleted";
+      orderDeleted: {
+        orderId: bigint;
+        minecraftUsername: string;
+        rankName: string;
+        priceInr: bigint;
+      };
+    }
+  | {
+      __kind__: "orderStatusChanged";
+      orderStatusChanged: {
+        orderId: bigint;
+        minecraftUsername: string;
+        rankName: string;
+        oldStatus: OrderStatusCode;
+        newStatus: OrderStatusCode;
+      };
+    }
+  | {
+      __kind__: "adminLogin";
+      adminLogin: Record<string, never>;
+    }
+  | {
+      __kind__: "adminRemoved";
+      adminRemoved: { removedPrincipal: Principal };
+    };
+
+export interface ActivityLogEntry {
+  principal: Principal;
+  timestamp: bigint;
+  action: ActivityAction;
+}
 
 export function useRanks() {
   const { actor, isFetching } = useActor();
@@ -90,5 +134,54 @@ export function useCreateCheckoutSession() {
       if (!actor) throw new Error("Actor not ready");
       return actor.createCheckoutSession(items, successUrl, cancelUrl);
     },
+  });
+}
+
+export function useLoginLog() {
+  const { actor, isFetching } = useActor();
+  return useQuery<LoginLogEntry[]>({
+    queryKey: ["loginLog"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        return await actor.getLoginLog();
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useAdminList() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Principal[]>({
+    queryKey: ["adminList"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        return await actor.getAdminList();
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useActivityLog() {
+  const { actor, isFetching } = useActor();
+  return useQuery<ActivityLogEntry[]>({
+    queryKey: ["activityLog"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return await (actor as any).getActivityLog();
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching,
   });
 }

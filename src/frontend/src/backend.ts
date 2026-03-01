@@ -89,12 +89,34 @@ export class ExternalBlob {
         return this;
     }
 }
-export interface http_request_result {
+export interface TransformationOutput {
     status: bigint;
     body: Uint8Array;
     headers: Array<http_header>;
 }
-export interface TransformationOutput {
+export interface Rank {
+    name: string;
+    color: string;
+    tier: bigint;
+    seasonalPrice: bigint;
+    sevenDayPrice: bigint;
+}
+export interface Order {
+    id: bigint;
+    rankName: string;
+    status: OrderStatusCode;
+    duration: Duration;
+    owner: Principal;
+    createdAt: bigint;
+    minecraftUsername: string;
+    stripeSessionId: string;
+    priceUsd: bigint;
+}
+export interface http_header {
+    value: string;
+    name: string;
+}
+export interface http_request_result {
     status: bigint;
     body: Uint8Array;
     headers: Array<http_header>;
@@ -106,12 +128,9 @@ export interface ShoppingItem {
     priceInCents: bigint;
     productDescription: string;
 }
-export interface Rank {
-    name: string;
-    color: string;
-    tier: bigint;
-    seasonalPrice: bigint;
-    sevenDayPrice: bigint;
+export interface LoginLogEntry {
+    principal: Principal;
+    timestamp: bigint;
 }
 export interface TransformationInput {
     context: Uint8Array;
@@ -133,24 +152,9 @@ export interface StripeConfiguration {
     allowedCountries: Array<string>;
     secretKey: string;
 }
-export interface Order {
-    id: bigint;
-    rankName: string;
-    status: OrderStatusCode;
-    duration: Duration;
-    owner: Principal;
-    createdAt: bigint;
-    minecraftUsername: string;
-    stripeSessionId: string;
-    priceUsd: bigint;
-}
 export interface UserProfile {
     name: string;
     minecraftUsername?: string;
-}
-export interface http_header {
-    value: string;
-    name: string;
 }
 export enum Duration {
     Seasonal = "Seasonal",
@@ -172,15 +176,20 @@ export interface backendInterface {
     claimFirstAdmin(): Promise<boolean>;
     createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
     createOrder(minecraftUsername: string, rankName: string, duration: Duration, priceUsd: bigint): Promise<bigint>;
+    deleteOrder(orderId: bigint): Promise<boolean>;
+    getAdminList(): Promise<Array<Principal>>;
     getAllOrders(): Promise<Array<Order>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
+    getLoginLog(): Promise<Array<LoginLogEntry>>;
     getOrdersByUsername(username: string): Promise<Array<Order>>;
     getRanks(): Promise<Array<Rank>>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     isStripeConfigured(): Promise<boolean>;
+    loginWithAdminCode(code: string): Promise<boolean>;
+    removeAdmin(target: Principal): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
@@ -259,6 +268,34 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async deleteOrder(arg0: bigint): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteOrder(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteOrder(arg0);
+            return result;
+        }
+    }
+    async getAdminList(): Promise<Array<Principal>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAdminList();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAdminList();
+            return result;
+        }
+    }
     async getAllOrders(): Promise<Array<Order>> {
         if (this.processError) {
             try {
@@ -299,6 +336,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.getCallerUserRole();
             return from_candid_UserRole_n16(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getLoginLog(): Promise<Array<LoginLogEntry>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getLoginLog();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getLoginLog();
+            return result;
         }
     }
     async getOrdersByUsername(arg0: string): Promise<Array<Order>> {
@@ -382,6 +433,34 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.isStripeConfigured();
+            return result;
+        }
+    }
+    async loginWithAdminCode(arg0: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.loginWithAdminCode(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.loginWithAdminCode(arg0);
+            return result;
+        }
+    }
+    async removeAdmin(arg0: Principal): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.removeAdmin(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.removeAdmin(arg0);
             return result;
         }
     }

@@ -12,6 +12,7 @@ import type { Principal } from '@icp-sdk/core/principal';
 
 export type Duration = { 'Seasonal' : null } |
   { 'SevenDay' : null };
+export interface LoginLogEntry { 'principal' : Principal, 'timestamp' : bigint }
 export interface Order {
   'id' : bigint,
   'rankName' : string,
@@ -79,15 +80,20 @@ export interface _SERVICE {
     string
   >,
   'createOrder' : ActorMethod<[string, string, Duration, bigint], bigint>,
+  'deleteOrder' : ActorMethod<[bigint], boolean>,
+  'getAdminList' : ActorMethod<[], Array<Principal>>,
   'getAllOrders' : ActorMethod<[], Array<Order>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getLoginLog' : ActorMethod<[], Array<LoginLogEntry>>,
   'getOrdersByUsername' : ActorMethod<[string], Array<Order>>,
   'getRanks' : ActorMethod<[], Array<Rank>>,
   'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isStripeConfigured' : ActorMethod<[], boolean>,
+  'loginWithAdminCode' : ActorMethod<[string], boolean>,
+  'removeAdmin' : ActorMethod<[Principal], boolean>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,
   'transform' : ActorMethod<[TransformationInput], TransformationOutput>,

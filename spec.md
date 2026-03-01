@@ -1,19 +1,38 @@
 # Azoro Rank Store
 
 ## Current State
-Full-stack Minecraft rank store. Backend has `claimFirstAdmin()` so the first logged-in user becomes admin. However, `AccessControl.isAdmin` internally calls `getUserRole` which traps with "User is not registered" for any principal not yet in the roles map. This causes `isCallerAdmin()` to throw instead of returning `false`, making the Claim Admin flow fail silently.
+Full Minecraft rank & crate store with:
+- Public store (ranks + crates) with Discord ticket purchase flow
+- Admin panel at /admin with code-based login ("azoroontop")
+- Order management: view all orders (rank + crate), mark fulfilled, delete
+- Admin management: list admins, remove admin
+- Login Activity Log: shows which principals logged in as admin and when
 
 ## Requested Changes (Diff)
 
 ### Add
-- Nothing new
+- **Activity Log** section in admin panel that shows every admin action:
+  - Order deleted (who deleted it, which order, username, rank name, price)
+  - Order status changed (who changed it, from what status to what status)
+  - Admin login (who logged in and when)
+  - Admin removed (who was removed)
+- New backend `getActivityLog()` query (admin only) returning `ActivityLogEntry[]`
+- New `ActivityLogEntry` type: `{ principal, timestamp, action: ActivityAction }`
+- New `ActivityAction` variant with: `#orderDeleted`, `#orderStatusChanged`, `#adminLogin`, `#adminRemoved`
+- Backend records activity in: deleteOrder, updateOrderStatus, loginWithAdminCode, removeAdmin
+- New `useActivityLog` query hook in useQueries.ts
 
 ### Modify
-- `isAdmin` helper in access-control must safely return `false` for principals not yet registered (no trap)
+- Replace the current "Login Activity Log" section (which only shows logins) with a unified "Actions Log" section
+- Actions Log shows all activity types (not just logins) with appropriate labels, colored by action type
+- Each row shows: who did it (truncated principal), what action, relevant details, and timestamp
 
 ### Remove
-- Nothing
+- The standalone "Login Activity Log" section (replaced by the unified Actions Log)
 
 ## Implementation Plan
-1. Regenerate backend with `isAdmin` returning `false` safely for unknown principals (switch on `userRoles.get(caller)` instead of calling `getUserRole` which traps)
-2. Keep all existing functions: claimFirstAdmin, createOrder, updateOrderStatus, getAllOrders, getOrdersByUsername, getRanks, isStripeConfigured, setStripeConfiguration, getCallerUserProfile, saveCallerUserProfile
+1. The backend already has ActivityLogEntry and ActivityAction types in main.mo, and activityLog list declared -- but the functions don't record to it yet and getActivityLog is missing. Backend needs regeneration.
+2. Add `getActivityLog` to backend.d.ts interface
+3. Add `ActivityLogEntry` and `ActivityAction` types to backend.d.ts
+4. Add `useActivityLog` hook in useQueries.ts
+5. Replace Login Activity Log section in AdminPage.tsx with a new "Actions Log" section that calls useActivityLog and renders action details per type

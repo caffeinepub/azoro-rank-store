@@ -304,13 +304,13 @@ export default function HomePage() {
                 Boost our Discord server
               </span>
               <span
-                className="hidden sm:inline text-xs font-mono"
+                className="text-xs font-mono"
                 style={{ color: "oklch(0.65 0.12 265)" }}
               >
-                →
+                and get
               </span>
               <span
-                className="hidden sm:inline font-display font-black text-sm tracking-widest"
+                className="font-display font-black text-sm tracking-widest"
                 style={{
                   color: "oklch(0.82 0.18 310)",
                   textShadow: "0 0 10px oklch(0.68 0.22 310 / 0.7)",
@@ -319,7 +319,7 @@ export default function HomePage() {
                 BOOSTER RANK
               </span>
               <span
-                className="hidden sm:inline text-xs font-mono"
+                className="text-xs font-mono"
                 style={{ color: "oklch(0.65 0.12 265)" }}
               >
                 in AZOROMC — FREE
