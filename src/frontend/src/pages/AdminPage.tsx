@@ -12,7 +12,6 @@ import {
 import type { Principal } from "@icp-sdk/core/principal";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Activity,
   ArrowLeft,
   CheckCircle2,
   Clock,
@@ -22,6 +21,7 @@ import {
   Key,
   Loader2,
   Lock,
+  LogIn,
   Package,
   Shield,
   Trash2,
@@ -34,12 +34,11 @@ import { toast } from "sonner";
 import { Duration, OrderStatusCode } from "../backend";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import type { ActivityLogEntry } from "../hooks/useQueries";
 import {
-  useActivityLog,
   useAdminList,
   useAllOrders,
   useIsStripeConfigured,
+  useLoginLog,
 } from "../hooks/useQueries";
 
 const STATUS_STYLES: Record<OrderStatusCode, { label: string; color: string }> =
@@ -73,7 +72,7 @@ export default function AdminPage() {
 
   const { data: orders, isLoading: ordersLoading } = useAllOrders();
   const { data: adminList, isLoading: adminListLoading } = useAdminList();
-  const { data: activityLog, isLoading: activityLogLoading } = useActivityLog();
+  const { data: loginLog, isLoading: loginLogLoading } = useLoginLog();
   const { actor } = useActor();
 
   const queryClient = useQueryClient();
@@ -931,7 +930,7 @@ export default function AdminPage() {
               )}
             </div>
 
-            {/* ── Actions Log ── */}
+            {/* ── Login Log ── */}
             <div
               className="rounded-2xl overflow-hidden"
               style={{
@@ -943,11 +942,11 @@ export default function AdminPage() {
                 className="px-6 py-4 flex items-center gap-3"
                 style={{ borderBottom: "1px solid oklch(0.18 0.03 280)" }}
               >
-                <Activity
+                <LogIn
                   className="w-4 h-4"
                   style={{ color: "oklch(0.68 0.22 142)" }}
                 />
-                <h3 className="font-display font-bold text-lg">Actions Log</h3>
+                <h3 className="font-display font-bold text-lg">Login Log</h3>
                 <span
                   className="ml-auto px-2 py-0.5 rounded font-mono text-xs font-bold"
                   style={{
@@ -955,17 +954,17 @@ export default function AdminPage() {
                     color: "oklch(0.68 0.22 142)",
                   }}
                 >
-                  {activityLog ? Math.min(activityLog.length, 100) : 0} entries
+                  {loginLog ? Math.min(loginLog.length, 100) : 0} entries
                 </span>
               </div>
 
-              {activityLogLoading ? (
+              {loginLogLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : !activityLog || activityLog.length === 0 ? (
+              ) : !loginLog || loginLog.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground font-mono text-sm">
-                  No activity recorded yet.
+                  No logins recorded yet.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -976,103 +975,40 @@ export default function AdminPage() {
                           borderBottom: "1px solid oklch(0.18 0.03 280)",
                         }}
                       >
-                        {["Who", "Action", "Details", "Date & Time"].map(
-                          (h) => (
-                            <TableHead
-                              key={h}
-                              className="font-mono text-xs uppercase tracking-widest text-muted-foreground"
-                            >
-                              {h}
-                            </TableHead>
-                          ),
-                        )}
+                        {["#", "Principal", "Date & Time"].map((h) => (
+                          <TableHead
+                            key={h}
+                            className="font-mono text-xs uppercase tracking-widest text-muted-foreground"
+                          >
+                            {h}
+                          </TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {[...activityLog]
+                      {[...loginLog]
                         .sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1))
                         .slice(0, 100)
-                        .map((entry: ActivityLogEntry, idx: number) => {
+                        .map((entry, idx) => {
                           const principalText = entry.principal.toText();
                           const truncated =
-                            principalText.length > 20
-                              ? `${principalText.slice(0, 10)}…${principalText.slice(-6)}`
+                            principalText.length > 24
+                              ? `${principalText.slice(0, 12)}…${principalText.slice(-8)}`
                               : principalText;
                           const dateStr = new Date(
                             Number(entry.timestamp) / 1_000_000,
                           ).toLocaleString();
-                          const key = `${principalText}-${entry.timestamp.toString()}-${idx}`;
-
-                          // Render action label + details
-                          let actionLabel: {
-                            text: string;
-                            color: string;
-                            bg: string;
-                          };
-                          let details = "";
-
-                          const action = entry.action;
-                          if (action.__kind__ === "orderDeleted") {
-                            const d = action.orderDeleted;
-                            actionLabel = {
-                              text: "Order Deleted",
-                              color: "oklch(0.62 0.22 25)",
-                              bg: "oklch(0.62 0.22 25 / 0.15)",
-                            };
-                            details = `Order #${d.orderId} — ${d.rankName} for ${d.minecraftUsername} (₹${Number(d.priceInr)})`;
-                          } else if (action.__kind__ === "orderStatusChanged") {
-                            const d = action.orderStatusChanged;
-                            actionLabel = {
-                              text: "Status Changed",
-                              color: "oklch(0.78 0.16 85)",
-                              bg: "oklch(0.78 0.16 85 / 0.15)",
-                            };
-                            details = `Order #${d.orderId} ${d.minecraftUsername} → ${d.newStatus}`;
-                          } else if (action.__kind__ === "adminLogin") {
-                            actionLabel = {
-                              text: "Admin Login",
-                              color: "oklch(0.68 0.22 142)",
-                              bg: "oklch(0.68 0.22 142 / 0.15)",
-                            };
-                            details = "Logged into admin panel";
-                          } else {
-                            // adminRemoved
-                            const d = action.adminRemoved;
-                            const removedText = d.removedPrincipal.toText();
-                            const removedTrunc =
-                              removedText.length > 20
-                                ? `${removedText.slice(0, 10)}…${removedText.slice(-6)}`
-                                : removedText;
-                            actionLabel = {
-                              text: "Admin Removed",
-                              color: "oklch(0.62 0.22 25)",
-                              bg: "oklch(0.62 0.22 25 / 0.15)",
-                            };
-                            details = `Removed ${removedTrunc}`;
-                          }
-
                           return (
                             <TableRow
-                              key={key}
+                              key={`${principalText}-${entry.timestamp.toString()}-${idx}`}
                               className="border-b"
                               style={{ borderColor: "oklch(0.15 0.02 280)" }}
                             >
                               <TableCell className="font-mono text-xs text-muted-foreground">
+                                {idx + 1}
+                              </TableCell>
+                              <TableCell className="font-mono text-sm text-foreground">
                                 {truncated}
-                              </TableCell>
-                              <TableCell>
-                                <span
-                                  className="px-2 py-0.5 rounded font-mono text-xs font-bold whitespace-nowrap"
-                                  style={{
-                                    background: actionLabel.bg,
-                                    color: actionLabel.color,
-                                  }}
-                                >
-                                  {actionLabel.text}
-                                </span>
-                              </TableCell>
-                              <TableCell className="font-mono text-xs text-foreground max-w-xs truncate">
-                                {details}
                               </TableCell>
                               <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
                                 {dateStr}
